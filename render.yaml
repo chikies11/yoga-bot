@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: yoga-telegram-bot
+    env: java
+    plan: free
+    buildCommand: mvn clean package
+    startCommand: java -jar target/yoga-telegram-bot-1.0.0.jar
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: ADMIN_TELEGRAM_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_USERNAME
+        sync: false
+      - key: SUPABASE_PASSWORD
+        sync: false
+      - key: PORT
+        value: 8080
