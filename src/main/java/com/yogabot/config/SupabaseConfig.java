@@ -3,9 +3,7 @@ package com.yogabot.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import javax.sql.DataSource;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 public class SupabaseConfig {
@@ -13,24 +11,21 @@ public class SupabaseConfig {
     @Value("${supabase.url}")
     private String supabaseUrl;
 
-    @Value("${supabase.username}")
-    private String username;
-
-    @Value("${supabase.password}")
-    private String password;
+    @Value("${supabase.key}")
+    private String supabaseKey;
 
     @Bean
-    public DataSource dataSource() {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("org.postgresql.Driver");
-        dataSource.setUrl(supabaseUrl);
-        dataSource.setUsername(username);
-        dataSource.setPassword(password);
-        return dataSource;
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 
     @Bean
-    public JdbcTemplate jdbcTemplate(DataSource dataSource) {
-        return new JdbcTemplate(dataSource);
+    public String getSupabaseUrl() {
+        return supabaseUrl;
+    }
+
+    @Bean
+    public String getSupabaseKey() {
+        return supabaseKey;
     }
 }

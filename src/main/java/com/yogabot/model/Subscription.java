@@ -1,14 +1,25 @@
 package com.yogabot.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class Subscription {
     private Long id;
+
+    @JsonProperty("user_id")
     private Long userId;
+
+    @JsonProperty("schedule_id")
     private Long scheduleId;
-    private String classType; // "MORNING" or "EVENING"
+
+    @JsonProperty("class_type")
+    private String classType;
+
+    @JsonProperty("class_date")
     private LocalDate classDate;
+
+    @JsonProperty("subscribed_at")
     private LocalDateTime subscribedAt;
 
     // constructors, getters, setters

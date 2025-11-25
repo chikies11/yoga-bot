@@ -4,45 +4,79 @@ import com.yogabot.model.Schedule;
 import com.yogabot.model.User;
 import com.yogabot.model.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.RowMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class SupabaseService {
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private RestTemplate restTemplate;
+
+    @Value("${supabase.url}")
+    private String supabaseUrl;
+
+    @Value("${supabase.key}")
+    private String supabaseKey;
+
+    private HttpHeaders createHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("apikey", supabaseKey);
+        headers.set("Authorization", "Bearer " + supabaseKey);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return headers;
+    }
 
     // Schedule methods
     public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         LocalDate endOfWeek = startOfWeek.plusDays(6);
-        String sql = "SELECT * FROM schedule WHERE date BETWEEN ? AND ? ORDER BY date";
-        return jdbcTemplate.query(sql, scheduleRowMapper, startOfWeek, endOfWeek);
+
+        String query = String.format("date.gte.%s&date.lte.%s&order=date",
+                startOfWeek, endOfWeek);
+
+        String url = supabaseUrl + "/rest/v1/schedule?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        ResponseEntity<Schedule[]> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, Schedule[].class);
+
+        Schedule[] schedules = response.getBody();
+        return schedules != null ? Arrays.asList(schedules) : List.of();
     }
 
     public Schedule getScheduleByDate(LocalDate date) {
-        String sql = "SELECT * FROM schedule WHERE date = ?";
-        List<Schedule> schedules = jdbcTemplate.query(sql, scheduleRowMapper, date);
-        return schedules.isEmpty() ? null : schedules.get(0);
+        String query = String.format("date=eq.%s", date);
+        String url = supabaseUrl + "/rest/v1/schedule?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        ResponseEntity<Schedule[]> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, Schedule[].class);
+
+        Schedule[] schedules = response.getBody();
+        return schedules != null && schedules.length > 0 ? schedules[0] : null;
     }
 
     public void updateSchedule(Schedule schedule) {
-        String sql = "UPDATE schedule SET morning_time = ?, morning_class = ?, evening_time = ?, evening_class = ?, is_active = ? WHERE id = ?";
-        jdbcTemplate.update(sql, schedule.getMorningTime(), schedule.getMorningClass(),
-                schedule.getEveningTime(), schedule.getEveningClass(), schedule.isActive(), schedule.getId());
+        String url = supabaseUrl + "/rest/v1/schedule?id=eq." + schedule.getId();
+
+        HttpEntity<Schedule> entity = new HttpEntity<>(schedule, createHeaders());
+        restTemplate.exchange(url, HttpMethod.PATCH, entity, String.class);
     }
 
     public void deleteSchedule(Long id) {
-        String sql = "DELETE FROM schedule WHERE id = ?";
-        jdbcTemplate.update(sql, id);
+        String url = supabaseUrl + "/rest/v1/schedule?id=eq." + id;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        restTemplate.exchange(url, HttpMethod.DELETE, entity, String.class);
     }
 
     public void initializeDefaultSchedule() {
-        // Initialize default schedule for the current week
         LocalDate today = LocalDate.now();
         LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
 
@@ -52,11 +86,16 @@ public class SupabaseService {
 
             if (existing == null) {
                 Schedule schedule = createDefaultScheduleForDay(date);
-                String sql = "INSERT INTO schedule (date, morning_time, morning_class, evening_time, evening_class, is_active) VALUES (?, ?, ?, ?, ?, ?)";
-                jdbcTemplate.update(sql, schedule.getDate(), schedule.getMorningTime(), schedule.getMorningClass(),
-                        schedule.getEveningTime(), schedule.getEveningClass(), schedule.isActive());
+                createSchedule(schedule);
             }
         }
+    }
+
+    private void createSchedule(Schedule schedule) {
+        String url = supabaseUrl + "/rest/v1/schedule";
+
+        HttpEntity<Schedule> entity = new HttpEntity<>(schedule, createHeaders());
+        restTemplate.exchange(url, HttpMethod.POST, entity, Schedule.class);
     }
 
     private Schedule createDefaultScheduleForDay(LocalDate date) {
@@ -82,81 +121,71 @@ public class SupabaseService {
 
     // User methods
     public User getUserByTelegramId(Long telegramId) {
-        String sql = "SELECT * FROM users WHERE telegram_id = ?";
-        List<User> users = jdbcTemplate.query(sql, userRowMapper, telegramId);
-        return users.isEmpty() ? null : users.get(0);
+        String query = String.format("telegram_id=eq.%d", telegramId);
+        String url = supabaseUrl + "/rest/v1/users?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        ResponseEntity<User[]> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, User[].class);
+
+        User[] users = response.getBody();
+        return users != null && users.length > 0 ? users[0] : null;
     }
 
     public void saveUser(User user) {
-        String sql = "INSERT INTO users (telegram_id, first_name, last_name, username, is_admin) VALUES (?, ?, ?, ?, ?) " +
-                "ON CONFLICT (telegram_id) DO UPDATE SET first_name = ?, last_name = ?, username = ?";
-        jdbcTemplate.update(sql, user.getTelegramId(), user.getFirstName(), user.getLastName(),
-                user.getUsername(), user.isAdmin(), user.getFirstName(), user.getLastName(), user.getUsername());
+        String url = supabaseUrl + "/rest/v1/users";
+
+        HttpHeaders headers = createHeaders();
+        headers.set("Prefer", "resolution=merge-duplicates");
+
+        HttpEntity<User> entity = new HttpEntity<>(user, headers);
+        restTemplate.exchange(url, HttpMethod.POST, entity, User.class);
     }
 
     // Subscription methods
     public void subscribeToClass(Long userId, Long scheduleId, String classType, LocalDate classDate) {
-        String sql = "INSERT INTO subscriptions (user_id, schedule_id, class_type, class_date) VALUES (?, ?, ?, ?) " +
-                "ON CONFLICT (user_id, schedule_id, class_type) DO NOTHING";
-        jdbcTemplate.update(sql, userId, scheduleId, classType, classDate);
+        Subscription subscription = new Subscription(userId, scheduleId, classType, classDate);
+        String url = supabaseUrl + "/rest/v1/subscriptions";
+
+        HttpHeaders headers = createHeaders();
+        headers.set("Prefer", "resolution=merge-duplicates");
+
+        HttpEntity<Subscription> entity = new HttpEntity<>(subscription, headers);
+        restTemplate.exchange(url, HttpMethod.POST, entity, Subscription.class);
     }
 
     public void unsubscribeFromClass(Long userId, Long scheduleId, String classType) {
-        String sql = "DELETE FROM subscriptions WHERE user_id = ? AND schedule_id = ? AND class_type = ?";
-        jdbcTemplate.update(sql, userId, scheduleId, classType);
+        String query = String.format("user_id=eq.%d&schedule_id=eq.%d&class_type=eq.%s",
+                userId, scheduleId, classType);
+        String url = supabaseUrl + "/rest/v1/subscriptions?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        restTemplate.exchange(url, HttpMethod.DELETE, entity, String.class);
     }
 
     public List<Subscription> getSubscriptionsForClass(Long scheduleId, String classType) {
-        String sql = "SELECT s.*, u.first_name, u.last_name, u.username FROM subscriptions s " +
-                "JOIN users u ON s.user_id = u.id WHERE s.schedule_id = ? AND s.class_type = ?";
-        return jdbcTemplate.query(sql, subscriptionRowMapper, scheduleId, classType);
+        String query = String.format("schedule_id=eq.%d&class_type=eq.%s",
+                scheduleId, classType);
+        String url = supabaseUrl + "/rest/v1/subscriptions?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        ResponseEntity<Subscription[]> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, Subscription[].class);
+
+        Subscription[] subscriptions = response.getBody();
+        return subscriptions != null ? Arrays.asList(subscriptions) : List.of();
     }
 
     public boolean isUserSubscribed(Long userId, Long scheduleId, String classType) {
-        String sql = "SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND schedule_id = ? AND class_type = ?";
-        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, userId, scheduleId, classType);
-        return count != null && count > 0;
+        String query = String.format("user_id=eq.%d&schedule_id=eq.%d&class_type=eq.%s",
+                userId, scheduleId, classType);
+        String url = supabaseUrl + "/rest/v1/subscriptions?" + query;
+
+        HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+        ResponseEntity<Subscription[]> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, Subscription[].class);
+
+        Subscription[] subscriptions = response.getBody();
+        return subscriptions != null && subscriptions.length > 0;
     }
-
-    // Row mappers
-    private final RowMapper<Schedule> scheduleRowMapper = (rs, rowNum) -> {
-        Schedule schedule = new Schedule();
-        schedule.setId(rs.getLong("id"));
-        schedule.setDate(rs.getDate("date").toLocalDate());
-
-        if (rs.getTime("morning_time") != null) {
-            schedule.setMorningTime(rs.getTime("morning_time").toLocalTime());
-        }
-        schedule.setMorningClass(rs.getString("morning_class"));
-
-        if (rs.getTime("evening_time") != null) {
-            schedule.setEveningTime(rs.getTime("evening_time").toLocalTime());
-        }
-        schedule.setEveningClass(rs.getString("evening_class"));
-        schedule.setActive(rs.getBoolean("is_active"));
-
-        return schedule;
-    };
-
-    private final RowMapper<User> userRowMapper = (rs, rowNum) -> {
-        User user = new User();
-        user.setId(rs.getLong("id"));
-        user.setTelegramId(rs.getLong("telegram_id"));
-        user.setFirstName(rs.getString("first_name"));
-        user.setLastName(rs.getString("last_name"));
-        user.setUsername(rs.getString("username"));
-        user.setAdmin(rs.getBoolean("is_admin"));
-        return user;
-    };
-
-    private final RowMapper<Subscription> subscriptionRowMapper = (rs, rowNum) -> {
-        Subscription subscription = new Subscription();
-        subscription.setId(rs.getLong("id"));
-        subscription.setUserId(rs.getLong("user_id"));
-        subscription.setScheduleId(rs.getLong("schedule_id"));
-        subscription.setClassType(rs.getString("class_type"));
-        subscription.setClassDate(rs.getDate("class_date").toLocalDate());
-        subscription.setSubscribedAt(rs.getTimestamp("subscribed_at").toLocalDateTime());
-        return subscription;
-    };
 }

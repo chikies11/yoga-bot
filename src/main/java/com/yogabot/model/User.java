@@ -1,11 +1,22 @@
 package com.yogabot.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class User {
     private Long id;
+
+    @JsonProperty("telegram_id")
     private Long telegramId;
+
+    @JsonProperty("first_name")
     private String firstName;
+
+    @JsonProperty("last_name")
     private String lastName;
+
     private String username;
+
+    @JsonProperty("is_admin")
     private boolean isAdmin;
 
     // constructors, getters, setters

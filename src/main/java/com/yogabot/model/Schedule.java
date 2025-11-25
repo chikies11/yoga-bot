@@ -1,15 +1,28 @@
 package com.yogabot.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
 public class Schedule {
     private Long id;
+
+    @JsonProperty("date")
     private LocalDate date;
+
+    @JsonProperty("morning_time")
     private LocalTime morningTime;
+
+    @JsonProperty("morning_class")
     private String morningClass;
+
+    @JsonProperty("evening_time")
     private LocalTime eveningTime;
+
+    @JsonProperty("evening_class")
     private String eveningClass;
+
+    @JsonProperty("is_active")
     private boolean isActive;
 
     // constructors, getters, setters
