@@ -8,7 +8,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Run stage
-FROM openjdk:11-jre-slim
+FROM openjdk:11
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
