@@ -1,12 +1,12 @@
 # Build stage
-FROM maven:3.8.6-openjdk-11 AS build
+FROM maven:3.8.6-eclipse-temurin-11 AS build
 WORKDIR /workspace/app
 COPY pom.xml .
 COPY src src
 RUN mvn clean package -DskipTests
 
 # Run stage
-FROM openjdk:11
+FROM eclipse-temurin:11-jre-focal
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 WORKDIR /app
