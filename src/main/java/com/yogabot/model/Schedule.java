@@ -22,7 +22,7 @@ public class Schedule {
     @JsonProperty("evening_class")
     private String eveningClass;
 
-    @JsonProperty("is_active")
+    @JsonProperty("is_active") // Должно совпадать с именем в БД
     private boolean isActive;
 
     // constructors, getters, setters
