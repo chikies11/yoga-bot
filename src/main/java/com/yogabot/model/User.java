@@ -16,7 +16,7 @@ public class User {
 
     private String username;
 
-    @JsonProperty("is_admin")
+    @JsonProperty("is_admin") // Должно совпадать с именем в БД
     private boolean isAdmin;
 
     // constructors, getters, setters

@@ -133,13 +133,18 @@ public class SupabaseService {
     }
 
     public void saveUser(User user) {
-        String url = supabaseUrl + "/rest/v1/users";
+        try {
+            String url = supabaseUrl + "/rest/v1/users";
 
-        HttpHeaders headers = createHeaders();
-        headers.set("Prefer", "resolution=merge-duplicates");
+            HttpHeaders headers = createHeaders();
+            headers.set("Prefer", "resolution=merge-duplicates");
 
-        HttpEntity<User> entity = new HttpEntity<>(user, headers);
-        restTemplate.exchange(url, HttpMethod.POST, entity, User.class);
+            HttpEntity<User> entity = new HttpEntity<>(user, headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, User.class);
+        } catch (Exception e) {
+            System.err.println("Error saving user: " + e.getMessage());
+            // Можно добавить логирование или отладочную информацию
+        }
     }
 
     // Subscription methods
