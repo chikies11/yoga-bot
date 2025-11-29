@@ -22,20 +22,20 @@ public class Schedule {
     @JsonProperty("evening_class")
     private String eveningClass;
 
-    @JsonProperty("is_active") // Должно совпадать с именем в БД
-    private boolean isActive;
+    @JsonProperty("is_active")
+    private Boolean active; // Измените isActive на active
 
-    // constructors, getters, setters
+    // Конструкторы
     public Schedule() {}
 
     public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
-                    LocalTime eveningTime, String eveningClass, boolean isActive) {
+                    LocalTime eveningTime, String eveningClass, Boolean active) {
         this.date = date;
         this.morningTime = morningTime;
         this.morningClass = morningClass;
         this.eveningTime = eveningTime;
         this.eveningClass = eveningClass;
-        this.isActive = isActive;
+        this.active = active;
     }
 
     // Getters and Setters
@@ -57,6 +57,9 @@ public class Schedule {
     public String getEveningClass() { return eveningClass; }
     public void setEveningClass(String eveningClass) { this.eveningClass = eveningClass; }
 
-    public boolean isActive() { return isActive; }
-    public void setActive(boolean active) { isActive = active; }
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
+
+    // Дополнительный геттер для обратной совместимости если нужно
+    public Boolean isActive() { return active; }
 }
