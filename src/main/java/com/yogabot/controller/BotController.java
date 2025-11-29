@@ -72,7 +72,11 @@ public class BotController extends TelegramLongPollingBot {
                 sendSchedule(chatId);
                 break;
             case "📋 Запись":
-                sendMessage(chatId, "Функция просмотра записей доступна только администратору.");
+                if (isAdmin) {
+                    sendSubscriptionsMenu(chatId);
+                } else {
+                    sendMessage(chatId, "Функция просмотра записей доступна только администратору.");
+                }
                 break;
             case "✏️ Редактирование":
                 if (isAdmin) {
@@ -84,6 +88,20 @@ public class BotController extends TelegramLongPollingBot {
             case "🔔 Уведомления вкл/выкл":
                 if (isAdmin) {
                     toggleNotifications(chatId);
+                } else {
+                    sendAccessDenied(chatId);
+                }
+                break;
+            case "✏️ Изменить":
+                if (isAdmin) {
+                    sendEditScheduleMenu(chatId);
+                } else {
+                    sendAccessDenied(chatId);
+                }
+                break;
+            case "🗑 Удалить":
+                if (isAdmin) {
+                    sendDeleteScheduleMenu(chatId);
                 } else {
                     sendAccessDenied(chatId);
                 }
@@ -194,5 +212,26 @@ public class BotController extends TelegramLongPollingBot {
     public BotApiMethod<?> onWebhookUpdateReceived(Update update) {
         onUpdateReceived(update);
         return null;
+    }
+
+    private void sendSubscriptionsMenu(Long chatId) {
+        String text = "📋 Просмотр записей\n\n" +
+                "Выберите день и тип занятия для просмотра записавшихся:";
+        sendMessage(chatId, text);
+        // Здесь можно добавить инлайн-кнопки для выбора дня/типа занятия
+    }
+
+    private void sendEditScheduleMenu(Long chatId) {
+        String text = "✏️ Редактирование расписания\n\n" +
+                "Выберите день для редактирования:";
+        sendMessage(chatId, text);
+        // Здесь можно добавить инлайн-кнопки для выбора дня
+    }
+
+    private void sendDeleteScheduleMenu(Long chatId) {
+        String text = "🗑 Удаление занятия\n\n" +
+                "Выберите день и тип занятия для удаления:";
+        sendMessage(chatId, text);
+        // Здесь можно добавить инлайн-кнопки для выбора дня/типа занятия
     }
 }
