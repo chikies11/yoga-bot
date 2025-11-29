@@ -162,7 +162,7 @@ public class BotService {
         return sb.toString();
     }
 
-    private String getRussianDayName(DayOfWeek dayOfWeek) {
+    public String getRussianDayName(DayOfWeek dayOfWeek) {
         switch (dayOfWeek) {
             case MONDAY: return "Понедельник";
             case TUESDAY: return "Вторник";
