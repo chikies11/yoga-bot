@@ -33,6 +33,18 @@ public class SupabaseService {
         return headers;
     }
 
+    public boolean testConnection() {
+        try {
+            String url = supabaseUrl + "/rest/v1/schedule?limit=1";
+            HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+            restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            return true;
+        } catch (Exception e) {
+            System.err.println("Supabase connection failed: " + e.getMessage());
+            return false;
+        }
+    }
+
     // Schedule methods
     public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         LocalDate endOfWeek = startOfWeek.plusDays(6);
@@ -77,25 +89,51 @@ public class SupabaseService {
     }
 
     public void initializeDefaultSchedule() {
-        LocalDate today = LocalDate.now();
-        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        try {
+            System.out.println("Starting schedule initialization...");
 
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = startOfWeek.plusDays(i);
-            Schedule existing = getScheduleByDate(date);
+            LocalDate today = LocalDate.now();
+            LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
 
-            if (existing == null) {
-                Schedule schedule = createDefaultScheduleForDay(date);
-                createSchedule(schedule);
+            System.out.println("Initializing schedule for week starting from: " + startOfWeek);
+
+            for (int i = 0; i < 7; i++) {
+                LocalDate date = startOfWeek.plusDays(i);
+                Schedule existing = getScheduleByDate(date);
+
+                if (existing == null) {
+                    Schedule schedule = createDefaultScheduleForDay(date);
+                    createSchedule(schedule);
+                    System.out.println("Created schedule for: " + date);
+                } else {
+                    System.out.println("Schedule already exists for: " + date);
+                }
             }
+
+            System.out.println("Schedule initialization completed!");
+
+        } catch (Exception e) {
+            System.err.println("Error in initializeDefaultSchedule: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private void createSchedule(Schedule schedule) {
-        String url = supabaseUrl + "/rest/v1/schedule";
+        try {
+            String url = supabaseUrl + "/rest/v1/schedule";
 
-        HttpEntity<Schedule> entity = new HttpEntity<>(schedule, createHeaders());
-        restTemplate.exchange(url, HttpMethod.POST, entity, Schedule.class);
+            HttpHeaders headers = createHeaders();
+            HttpEntity<Schedule> entity = new HttpEntity<>(schedule, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class);
+
+            System.out.println("Schedule created successfully for: " + schedule.getDate());
+
+        } catch (Exception e) {
+            System.err.println("Error creating schedule for " + schedule.getDate() + ": " + e.getMessage());
+            throw e; // Пробрасываем исключение дальше
+        }
     }
 
     private Schedule createDefaultScheduleForDay(LocalDate date) {
@@ -107,15 +145,15 @@ public class SupabaseService {
             case "THURSDAY":
             case "FRIDAY":
             case "SUNDAY":
-                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС",
-                        LocalTime.of(17, 0), "МАЙСОР КЛАСС", true);
+                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС 8:00 - 11:30",
+                        LocalTime.of(17, 0), "МАЙСОР КЛАСС 17:00 - 20:30", true);
             case "TUESDAY":
-                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС",
+                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС 8:00 - 11:30",
                         null, null, true);
             case "SATURDAY":
-                return new Schedule(date, null, null, null, null, false);
+                return new Schedule(date, null, "-Отдых-", null, null, false);
             default:
-                return new Schedule(date, null, null, null, null, false);
+                return new Schedule(date, null, "-Отдых-", null, null, false);
         }
     }
 
