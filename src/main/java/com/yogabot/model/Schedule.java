@@ -1,12 +1,16 @@
 package com.yogabot.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
+@JsonInclude(JsonInclude.Include.NON_NULL) // Исключает null поля из JSON
 public class Schedule {
-    private Long id; // Будет генерироваться автоматически в БД
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY) // Только для чтения
+    private Long id;
 
     @JsonProperty("date")
     private LocalDate date;
@@ -28,18 +32,18 @@ public class Schedule {
     @JsonProperty("is_active")
     private Boolean active;
 
-    // Конструктор БЕЗ ID - ID генерируется в БД
+    // Конструкторы
     public Schedule() {}
 
     public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
                     LocalTime eveningTime, String eveningClass, Boolean active) {
-        // Не устанавливаем id - он будет null
         this.date = date;
         this.morningTime = morningTime;
         this.morningClass = morningClass;
         this.eveningTime = eveningTime;
         this.eveningClass = eveningClass;
         this.active = active;
+        // ID не устанавливаем - будет null
     }
 
     // Getters and Setters
