@@ -114,6 +114,7 @@ public class SupabaseService {
             case "THURSDAY":
             case "FRIDAY":
             case "SUNDAY":
+                // Не устанавливаем ID - он будет null
                 return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС 8:00 - 11:30",
                         LocalTime.of(17, 0), "МАЙСОР КЛАСС 17:00 - 20:30", true);
             case "TUESDAY":

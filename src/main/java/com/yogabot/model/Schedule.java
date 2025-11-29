@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 public class Schedule {
-    private Long id;
+    private Long id; // Будет генерироваться автоматически в БД
 
     @JsonProperty("date")
     private LocalDate date;
@@ -28,11 +28,12 @@ public class Schedule {
     @JsonProperty("is_active")
     private Boolean active;
 
-    // constructors, getters, setters
+    // Конструктор БЕЗ ID - ID генерируется в БД
     public Schedule() {}
 
     public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
                     LocalTime eveningTime, String eveningClass, Boolean active) {
+        // Не устанавливаем id - он будет null
         this.date = date;
         this.morningTime = morningTime;
         this.morningClass = morningClass;
