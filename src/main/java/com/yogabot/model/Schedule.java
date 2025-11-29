@@ -1,5 +1,6 @@
 package com.yogabot.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -11,21 +12,23 @@ public class Schedule {
     private LocalDate date;
 
     @JsonProperty("morning_time")
+    @JsonFormat(pattern = "HH:mm")
     private LocalTime morningTime;
 
     @JsonProperty("morning_class")
     private String morningClass;
 
     @JsonProperty("evening_time")
+    @JsonFormat(pattern = "HH:mm")
     private LocalTime eveningTime;
 
     @JsonProperty("evening_class")
     private String eveningClass;
 
     @JsonProperty("is_active")
-    private Boolean active; // Измените isActive на active
+    private Boolean active;
 
-    // Конструкторы
+    // constructors, getters, setters
     public Schedule() {}
 
     public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
@@ -60,6 +63,6 @@ public class Schedule {
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
 
-    // Дополнительный геттер для обратной совместимости если нужно
+    // Для обратной совместимости
     public Boolean isActive() { return active; }
 }
