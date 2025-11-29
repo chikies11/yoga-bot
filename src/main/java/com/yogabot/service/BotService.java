@@ -37,24 +37,21 @@ public class BotService {
         sb.append("📅 Расписание на текущую неделю:\n\n");
 
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
         for (Schedule schedule : schedules) {
             String dayName = getRussianDayName(schedule.getDate().getDayOfWeek());
             sb.append("🗓 ").append(dayName).append(" (").append(schedule.getDate().format(dateFormatter)).append("):\n");
 
-            if (schedule.getMorningTime() != null) {
-                sb.append("🌅 Утро: ").append(schedule.getMorningTime().format(timeFormatter))
-                        .append(" - ").append(schedule.getMorningClass()).append("\n");
+            if (schedule.getMorningTime() != null && schedule.isActive()) {
+                sb.append("🌅 ").append(schedule.getMorningClass()).append("\n");
             }
 
-            if (schedule.getEveningTime() != null) {
-                sb.append("🌇 Вечер: ").append(schedule.getEveningTime().format(timeFormatter))
-                        .append(" - ").append(schedule.getEveningClass()).append("\n");
+            if (schedule.getEveningTime() != null && schedule.isActive()) {
+                sb.append("🌇 ").append(schedule.getEveningClass()).append("\n");
             }
 
-            if (schedule.getMorningTime() == null && schedule.getEveningTime() == null) {
-                sb.append("💤 Отдых\n");
+            if ((schedule.getMorningTime() == null && schedule.getEveningTime() == null) || !schedule.isActive()) {
+                sb.append("💤 ").append(schedule.getMorningClass() != null ? schedule.getMorningClass() : "Отдых").append("\n");
             }
 
             sb.append("\n");
