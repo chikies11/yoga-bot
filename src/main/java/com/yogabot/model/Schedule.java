@@ -3,6 +3,9 @@ package com.yogabot.model;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalTimeDeserializer;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -16,15 +19,15 @@ public class Schedule {
     private LocalDate date;
 
     @JsonProperty("morning_time")
-    @JsonFormat(pattern = "HH:mm")
+    @JsonDeserialize(using = LocalTimeDeserializer.class)
     private LocalTime morningTime;
+
+    @JsonProperty("evening_time")
+    @JsonDeserialize(using = LocalTimeDeserializer.class)
+    private LocalTime eveningTime;
 
     @JsonProperty("morning_class")
     private String morningClass;
-
-    @JsonProperty("evening_time")
-    @JsonFormat(pattern = "HH:mm")
-    private LocalTime eveningTime;
 
     @JsonProperty("evening_class")
     private String eveningClass;
