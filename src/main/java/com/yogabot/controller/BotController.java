@@ -1,6 +1,7 @@
 package com.yogabot.controller;
 
 import com.yogabot.model.Schedule;
+import com.yogabot.model.Subscription;
 import com.yogabot.service.BotService;
 import com.yogabot.service.SupabaseService;
 import com.yogabot.util.KeyboardUtil;
@@ -62,12 +63,6 @@ public class BotController extends TelegramLongPollingBot {
         String text = message.getText();
         Long userId = message.getFrom().getId();
 
-        // Сохраняем информацию о пользователе
-        User user = new User(userId, message.getFrom().getFirstName(),
-                message.getFrom().getLastName(), message.getFrom().getUserName(),
-                botService.isAdmin(userId));
-        supabaseService.saveUser(user);
-
         boolean isAdmin = botService.isAdmin(userId);
 
         switch (text) {
@@ -79,7 +74,7 @@ public class BotController extends TelegramLongPollingBot {
                 break;
             case "📋 Запись":
                 if (isAdmin) {
-                    sendSubscriptionsMenu(chatId);
+                    sendMessage(chatId, "Функция просмотра записей будет доступна после настройки подписок");
                 } else {
                     sendMessage(chatId, "Функция просмотра записей доступна только администратору.");
                 }
@@ -92,11 +87,7 @@ public class BotController extends TelegramLongPollingBot {
                 }
                 break;
             case "🔔 Уведомления вкл/выкл":
-                if (isAdmin) {
-                    toggleNotifications(chatId);
-                } else {
-                    sendAccessDenied(chatId);
-                }
+                sendMessage(chatId, "Функция управления уведомлениями в разработке.");
                 break;
             case "✏️ Изменить":
                 if (isAdmin) {
@@ -120,25 +111,44 @@ public class BotController extends TelegramLongPollingBot {
         }
     }
 
-    private void handleSubscription(String data, Long userId, Long chatId, Integer messageId) {
-        String[] parts = data.split("_");
-        String action = parts[0]; // subscribe or unsubscribe
-        String classType = parts[1].toUpperCase(); // MORNING or EVENING
-        Long scheduleId = Long.parseLong(parts[2]);
+    private void handleSubscription(String data, Long userId, Long chatId) {
+        try {
+            String[] parts = data.split("_");
+            String action = parts[0]; // subscribe or unsubscribe
+            String classType = parts[1].toUpperCase(); // MORNING or EVENING
+            Long scheduleId = Long.parseLong(parts[2]);
 
-        User user = supabaseService.getUserByTelegramId(userId);
-        if (user == null) {
-            sendMessage(chatId, "Ошибка: пользователь не найден.");
-            return;
-        }
+            // Сначала сохраняем/обновляем пользователя
+            User user = supabaseService.getUserByTelegramId(userId);
+            if (user == null) {
+                // Создаем нового пользователя
+                user = new User();
+                user.setTelegramId(userId);
+                user.setAdmin(false); // по умолчанию не админ
+                supabaseService.saveUser(user);
 
-        if (action.equals("subscribe")) {
-            supabaseService.subscribeToClass(user.getId(), scheduleId, classType,
-                    LocalDate.now().plusDays(1));
-            sendMessage(chatId, "✅ Вы успешно записались на занятие!");
-        } else {
-            supabaseService.unsubscribeFromClass(user.getId(), scheduleId, classType);
-            sendMessage(chatId, "❌ Запись на занятие отменена.");
+                // Получаем пользователя с ID из базы
+                user = supabaseService.getUserByTelegramId(userId);
+            }
+
+            if (user == null) {
+                sendMessage(chatId, "❌ Ошибка: не удалось создать пользователя");
+                return;
+            }
+
+            LocalDate classDate = LocalDate.now().plusDays(1); // занятия всегда на завтра
+
+            if (action.equals("subscribe")) {
+                supabaseService.subscribeToClass(user.getId(), scheduleId, classType, classDate);
+                sendMessage(chatId, "✅ Вы успешно записались на занятие!");
+            } else {
+                supabaseService.unsubscribeFromClass(user.getId(), scheduleId, classType);
+                sendMessage(chatId, "❌ Запись на занятие отменена.");
+            }
+        } catch (Exception e) {
+            sendMessage(chatId, "❌ Произошла ошибка при обработке запроса");
+            System.err.println("Error handling subscription: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -210,10 +220,59 @@ public class BotController extends TelegramLongPollingBot {
     }
 
     private void sendSubscriptionsMenu(Long chatId) {
-        String text = "📋 Просмотр записей\n\n" +
-                "Выберите день и тип занятия для просмотра записавшихся:";
-        sendMessage(chatId, text);
-        // Здесь можно добавить инлайн-кнопки для выбора дня/типа занятия
+        try {
+            LocalDate startOfWeek = LocalDate.now().minusDays(LocalDate.now().getDayOfWeek().getValue() - 1);
+            List<Schedule> schedules = supabaseService.getWeeklySchedule(startOfWeek);
+
+            if (schedules.isEmpty()) {
+                sendMessage(chatId, "Расписание не найдено.");
+                return;
+            }
+
+            InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            for (Schedule schedule : schedules) {
+                String dayName = botService.getRussianDayName(schedule.getDate().getDayOfWeek());
+
+                if (schedule.getMorningTime() != null) {
+                    List<InlineKeyboardButton> morningRow = new ArrayList<>();
+                    InlineKeyboardButton morningButton = new InlineKeyboardButton();
+                    morningButton.setText("📋 " + dayName + " Утро");
+                    morningButton.setCallbackData("view_morning_" + schedule.getId());
+                    morningRow.add(morningButton);
+                    rows.add(morningRow);
+                }
+
+                if (schedule.getEveningTime() != null) {
+                    List<InlineKeyboardButton> eveningRow = new ArrayList<>();
+                    InlineKeyboardButton eveningButton = new InlineKeyboardButton();
+                    eveningButton.setText("📋 " + dayName + " Вечер");
+                    eveningButton.setCallbackData("view_evening_" + schedule.getId());
+                    eveningRow.add(eveningButton);
+                    rows.add(eveningRow);
+                }
+            }
+
+            List<InlineKeyboardButton> backRow = new ArrayList<>();
+            InlineKeyboardButton backButton = new InlineKeyboardButton();
+            backButton.setText("🔙 Назад");
+            backButton.setCallbackData("back_to_main");
+            backRow.add(backButton);
+            rows.add(backRow);
+
+            keyboardMarkup.setKeyboard(rows);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(chatId.toString());
+            message.setText("📋 Выберите занятие для просмотра записей:");
+            message.setReplyMarkup(keyboardMarkup);
+
+            executeMessage(message);
+
+        } catch (Exception e) {
+            sendMessage(chatId, "Ошибка при загрузке расписания: " + e.getMessage());
+        }
     }
 
     private void sendEditScheduleMenu(Long chatId) {
@@ -323,10 +382,12 @@ public class BotController extends TelegramLongPollingBot {
         String data = callbackQuery.getData();
         Long userId = callbackQuery.getFrom().getId();
         Long chatId = callbackQuery.getMessage().getChatId();
-        Integer messageId = callbackQuery.getMessage().getMessageId();
 
         if (data.startsWith("subscribe_") || data.startsWith("unsubscribe_")) {
-            handleSubscription(data, userId, chatId, messageId);
+            handleSubscription(data, userId, chatId);
+        }
+        else if (data.startsWith("view_morning_") || data.startsWith("view_evening_")) {
+            handleViewSubscriptions(data, chatId);
         }
         else if (data.startsWith("edit_day_")) {
             handleEditDay(data, chatId);
@@ -336,6 +397,43 @@ public class BotController extends TelegramLongPollingBot {
         }
         else if (data.equals("back_to_edit")) {
             sendEditOptions(chatId);
+        }
+        else if (data.equals("back_to_main")) {
+            sendMainMenu(chatId, botService.isAdmin(userId));
+        }
+    }
+
+    private void handleViewSubscriptions(String data, Long chatId) {
+        try {
+            String[] parts = data.split("_");
+            String classType = parts[1].toUpperCase(); // MORNING or EVENING
+            Long scheduleId = Long.parseLong(parts[2]);
+
+            List<Subscription> subscriptions = supabaseService.getSubscriptionsForClass(scheduleId, classType);
+
+            if (subscriptions.isEmpty()) {
+                sendMessage(chatId, "На это занятие пока никто не записался.");
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            String classTime = classType.equals("MORNING") ? "утреннее" : "вечернее";
+            sb.append("📋 Список записавшихся на ").append(classTime).append(" занятие:\n\n");
+
+            for (int i = 0; i < subscriptions.size(); i++) {
+                Subscription subscription = subscriptions.get(i);
+                User user = supabaseService.getUserByTelegramId(subscription.getUserId());
+                if (user != null) {
+                    String userName = user.getUsername() != null ? "@" + user.getUsername() :
+                            user.getFirstName() + " " + user.getLastName();
+                    sb.append(i + 1).append(". ").append(userName).append("\n");
+                }
+            }
+
+            sendMessage(chatId, sb.toString());
+
+        } catch (Exception e) {
+            sendMessage(chatId, "Ошибка при загрузке записей: " + e.getMessage());
         }
     }
 
@@ -425,5 +523,82 @@ public class BotController extends TelegramLongPollingBot {
         } catch (Exception e) {
             sendMessage(chatId, "Ошибка при удалении расписания: " + e.getMessage());
         }
+    }
+
+    public SendMessage createNotificationMessage(LocalDate date) {
+        Schedule schedule = supabaseService.getScheduleByDate(date);
+        SendMessage message = new SendMessage();
+
+        if (schedule == null || (!schedule.isActive() && schedule.getMorningTime() == null && schedule.getEveningTime() == null)) {
+            message.setText("На завтра занятий не запланировано. Отдыхаем и восстанавливаемся! 💫");
+            return message;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📣 Напоминание о завтрашних занятиях:\n\n");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        String dayName = botService.getRussianDayName(schedule.getDate().getDayOfWeek());
+        sb.append("🗓 ").append(dayName).append(" (").append(date.format(formatter)).append(")\n\n");
+
+        boolean hasMorning = schedule.getMorningTime() != null && schedule.isActive();
+        boolean hasEvening = schedule.getEveningTime() != null && schedule.isActive();
+
+        if (hasMorning) {
+            sb.append("🌅 Утреннее занятие:\n");
+            sb.append("⏰ ").append(schedule.getMorningTime()).append("\n");
+            sb.append("🧘 ").append(schedule.getMorningClass()).append("\n\n");
+        }
+
+        if (hasEvening) {
+            sb.append("🌇 Вечернее занятие:\n");
+            sb.append("⏰ ").append(schedule.getEveningTime()).append("\n");
+            sb.append("🧘 ").append(schedule.getEveningClass()).append("\n");
+        }
+
+        message.setText(sb.toString());
+
+        // Добавляем инлайн-кнопки для записи
+        if (hasMorning || hasEvening) {
+            InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            if (hasMorning) {
+                List<InlineKeyboardButton> morningRow = new ArrayList<>();
+
+                InlineKeyboardButton morningSubscribe = new InlineKeyboardButton();
+                morningSubscribe.setText("📝 Записаться на утро");
+                morningSubscribe.setCallbackData("subscribe_morning_" + schedule.getId());
+
+                InlineKeyboardButton morningUnsubscribe = new InlineKeyboardButton();
+                morningUnsubscribe.setText("❌ Отменить утро");
+                morningUnsubscribe.setCallbackData("unsubscribe_morning_" + schedule.getId());
+
+                morningRow.add(morningSubscribe);
+                morningRow.add(morningUnsubscribe);
+                rows.add(morningRow);
+            }
+
+            if (hasEvening) {
+                List<InlineKeyboardButton> eveningRow = new ArrayList<>();
+
+                InlineKeyboardButton eveningSubscribe = new InlineKeyboardButton();
+                eveningSubscribe.setText("📝 Записаться на вечер");
+                eveningSubscribe.setCallbackData("subscribe_evening_" + schedule.getId());
+
+                InlineKeyboardButton eveningUnsubscribe = new InlineKeyboardButton();
+                eveningUnsubscribe.setText("❌ Отменить вечер");
+                eveningUnsubscribe.setCallbackData("unsubscribe_evening_" + schedule.getId());
+
+                eveningRow.add(eveningSubscribe);
+                eveningRow.add(eveningUnsubscribe);
+                rows.add(eveningRow);
+            }
+
+            keyboardMarkup.setKeyboard(rows);
+            message.setReplyMarkup(keyboardMarkup);
+        }
+
+        return message;
     }
 }

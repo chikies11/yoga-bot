@@ -27,7 +27,7 @@ public class YogaBotApplication {
             System.out.println("Default schedule initialized successfully!");
         } catch (Exception e) {
             System.err.println("Error initializing schedule: " + e.getMessage());
-            // Не прерываем запуск приложения если есть ошибки с БД
+            // Продолжаем работу даже если есть ошибки с БД
         }
     }
 }

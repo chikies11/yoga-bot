@@ -16,12 +16,13 @@ public class User {
 
     private String username;
 
-    @JsonProperty("is_admin") // Должно совпадать с именем в БД
+    @JsonProperty("is_admin")
     private boolean isAdmin;
 
-    // constructors, getters, setters
+    // Конструктор по умолчанию
     public User() {}
 
+    // Конструктор с параметрами
     public User(Long telegramId, String firstName, String lastName, String username, boolean isAdmin) {
         this.telegramId = telegramId;
         this.firstName = firstName;
