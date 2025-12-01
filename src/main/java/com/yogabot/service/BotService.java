@@ -64,7 +64,7 @@ public class BotService {
         Schedule schedule = supabaseService.getScheduleByDate(date);
         SendMessage message = new SendMessage();
 
-        if (schedule == null || (!schedule.isActive() && schedule.getMorningTime() == null && schedule.getEveningTime() == null)) {
+        if (schedule == null || (!schedule.getActive() && schedule.getMorningTime() == null && schedule.getEveningTime() == null)) {
             message.setText("На завтра занятий не запланировано. Отдыхаем и восстанавливаемся! 💫");
             return message;
         }
@@ -76,8 +76,8 @@ public class BotService {
         String dayName = getRussianDayName(date.getDayOfWeek());
         sb.append("🗓 ").append(dayName).append(" (").append(date.format(formatter)).append(")\n\n");
 
-        boolean hasMorning = schedule.getMorningTime() != null && schedule.isActive();
-        boolean hasEvening = schedule.getEveningTime() != null && schedule.isActive();
+        boolean hasMorning = schedule.getMorningTime() != null && schedule.getActive();
+        boolean hasEvening = schedule.getEveningTime() != null && schedule.getActive();
 
         if (hasMorning) {
             sb.append("🌅 Утреннее занятие:\n");
@@ -93,13 +93,14 @@ public class BotService {
 
         message.setText(sb.toString());
 
-        // Добавляем кнопки только если есть активные занятия
+        // Добавляем инлайн-кнопки для записи (если есть занятия)
         if (hasMorning || hasEvening) {
             InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
             if (hasMorning) {
                 List<InlineKeyboardButton> morningRow = new ArrayList<>();
+
                 InlineKeyboardButton morningSubscribe = new InlineKeyboardButton();
                 morningSubscribe.setText("📝 Записаться на утро");
                 morningSubscribe.setCallbackData("subscribe_morning_" + schedule.getId());
@@ -115,6 +116,7 @@ public class BotService {
 
             if (hasEvening) {
                 List<InlineKeyboardButton> eveningRow = new ArrayList<>();
+
                 InlineKeyboardButton eveningSubscribe = new InlineKeyboardButton();
                 eveningSubscribe.setText("📝 Записаться на вечер");
                 eveningSubscribe.setCallbackData("subscribe_evening_" + schedule.getId());

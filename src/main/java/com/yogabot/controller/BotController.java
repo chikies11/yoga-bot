@@ -87,7 +87,11 @@ public class BotController extends TelegramLongPollingBot {
                 }
                 break;
             case "🔔 Уведомления вкл/выкл":
-                sendMessage(chatId, "Функция управления уведомлениями в разработке.");
+                if (isAdmin) {
+                    sendNotificationSettings(chatId);
+                } else {
+                    sendAccessDenied(chatId);
+                }
                 break;
             case "✏️ Изменить":
                 if (isAdmin) {
@@ -109,6 +113,16 @@ public class BotController extends TelegramLongPollingBot {
             default:
                 sendMessage(chatId, "Неизвестная команда. Используйте кнопки меню.");
         }
+    }
+
+    private void sendNotificationSettings(Long chatId) {
+        String text = "🔔 Управление уведомлениями\n\n" +
+                "Автоматические уведомления отправляются ежедневно в:\n" +
+                "• 16:00 - уведомление о завтрашних занятиях\n" +
+                "• 16:01 - дополнительная проверка\n\n" +
+                "Уведомления включены и работают автоматически.";
+
+        sendMessage(chatId, text);
     }
 
     private void handleSubscription(String data, Long userId, Long chatId) {

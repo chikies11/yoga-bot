@@ -22,9 +22,9 @@ public class NotificationService {
     @Value("${telegram.channel.id}")
     private String channelId;
 
-    // Уведомление об утреннем занятии в 16:00 по Москве
+    // Уведомление о занятиях на завтра в 16:00 по Москве
     @Scheduled(cron = "0 0 16 * * ?", zone = "Europe/Moscow")
-    public void sendMorningClassNotification() {
+    public void sendDailyNotification() {
         try {
             LocalDate tomorrow = LocalDate.now().plusDays(1);
             SendMessage message = botService.createNotificationMessage(tomorrow);
@@ -32,16 +32,32 @@ public class NotificationService {
 
             botController.execute(message);
             System.out.println("✅ Sent notification to channel at: " + LocalDateTime.now());
+
         } catch (Exception e) {
             System.err.println("❌ Error sending notification: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    // Дополнительная проверка в 16:01
+    // Дополнительная проверка в 16:01 (можно добавить логику если нужно)
     @Scheduled(cron = "0 1 16 * * ?", zone = "Europe/Moscow")
     public void sendEveningClassNotification() {
         System.out.println("🔔 Evening notification check at: " + LocalDateTime.now());
         // Можно добавить дополнительную логику если нужно
+    }
+
+    // Тестовый метод для ручной отправки уведомления
+    public void sendTestNotification() {
+        try {
+            LocalDate tomorrow = LocalDate.now().plusDays(1);
+            SendMessage message = botService.createNotificationMessage(tomorrow);
+            message.setChatId(channelId);
+
+            botController.execute(message);
+            System.out.println("✅ Test notification sent to channel");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error sending test notification: " + e.getMessage());
+        }
     }
 }
