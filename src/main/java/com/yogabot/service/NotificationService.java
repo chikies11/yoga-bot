@@ -49,15 +49,29 @@ public class NotificationService {
     // Тестовый метод для ручной отправки уведомления
     public void sendTestNotification() {
         try {
+            System.out.println("🔄 Starting test notification...");
+            System.out.println("Channel ID: " + channelId);
+
             LocalDate tomorrow = LocalDate.now().plusDays(1);
+            System.out.println("Tomorrow date: " + tomorrow);
+
             SendMessage message = botService.createNotificationMessage(tomorrow);
             message.setChatId(channelId);
 
+            System.out.println("Message text: " + message.getText());
+            System.out.println("Has reply markup: " + (message.getReplyMarkup() != null));
+
             botController.execute(message);
-            System.out.println("✅ Test notification sent to channel");
+            System.out.println("✅ Test notification sent to channel successfully");
 
         } catch (Exception e) {
             System.err.println("❌ Error sending test notification: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to send test notification", e);
         }
+    }
+
+    public String getChannelId() {
+        return channelId;
     }
 }

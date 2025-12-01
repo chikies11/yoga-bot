@@ -1,19 +1,21 @@
 package com.yogabot.controller;
 
-import com.yogabot.service.BotService;
 import com.yogabot.service.NotificationService;
-import com.yogabot.service.SupabaseService;
+import com.yogabot.service.BotService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @RestController
 public class HealthController {
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private BotService botService;
 
     @GetMapping("/health")
     public String health() {
@@ -30,17 +32,12 @@ public class HealthController {
         return "pong - " + LocalDateTime.now();
     }
 
-    @Autowired
-    private NotificationService notificationService;
-
-    @Autowired
-    private BotService botService;
-
-    @PostMapping("/test-notification")
+    // Изменим на GET для удобства тестирования через браузер
+    @GetMapping("/test-notification")
     public String testNotification() {
         try {
             notificationService.sendTestNotification();
-            return "✅ Тестовое уведомление отправлено в канал!";
+            return "✅ Тестовое уведомление отправлено в канал! Проверьте канал Telegram.";
         } catch (Exception e) {
             return "❌ Ошибка отправки уведомления: " + e.getMessage();
         }
@@ -54,6 +51,16 @@ public class HealthController {
             return "Завтрашнее расписание: " + message.getText();
         } catch (Exception e) {
             return "Ошибка получения расписания: " + e.getMessage();
+        }
+    }
+
+    // Добавим endpoint для проверки канала
+    @GetMapping("/check-channel")
+    public String checkChannel() {
+        try {
+            return "Канал настроен на: " + notificationService.getChannelId();
+        } catch (Exception e) {
+            return "Ошибка получения информации о канале: " + e.getMessage();
         }
     }
 }
