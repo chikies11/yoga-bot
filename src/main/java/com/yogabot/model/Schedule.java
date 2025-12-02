@@ -9,21 +9,32 @@ import com.fasterxml.jackson.datatype.jsr310.deser.LocalTimeDeserializer;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-@JsonInclude(JsonInclude.Include.NON_NULL) // Исключает null поля из JSON
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class Schedule {
 
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY) // Только для чтения
+    // Пробуем разные варианты аннотаций для ID
+    @JsonProperty("id")
     private Long id;
+
+    @JsonProperty("ID")
+    private Long ID;
+
+    @JsonProperty("Id")
+    private Long Id;
+
+    @JsonProperty("schedule_id")
+    private Long scheduleId;
+
+    @JsonProperty("_id")
+    private Long _id;
 
     @JsonProperty("date")
     private LocalDate date;
 
     @JsonProperty("morning_time")
-    @JsonDeserialize(using = LocalTimeDeserializer.class)
     private LocalTime morningTime;
 
     @JsonProperty("evening_time")
-    @JsonDeserialize(using = LocalTimeDeserializer.class)
     private LocalTime eveningTime;
 
     @JsonProperty("morning_class")
@@ -35,23 +46,28 @@ public class Schedule {
     @JsonProperty("is_active")
     private Boolean active;
 
-    // Конструкторы
-    public Schedule() {}
-
-    public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
-                    LocalTime eveningTime, String eveningClass, Boolean active) {
-        this.date = date;
-        this.morningTime = morningTime;
-        this.morningClass = morningClass;
-        this.eveningTime = eveningTime;
-        this.eveningClass = eveningClass;
-        this.active = active;
-        // ID не устанавливаем - будет null
+    // Getters and Setters
+    public Long getRealId() {
+        if (id != null) return id;
+        if (ID != null) return ID;
+        if (Id != null) return Id;
+        if (scheduleId != null) return scheduleId;
+        if (_id != null) return _id;
+        return null;
     }
 
-    // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    // Обновите все геттеры и сеттеры
+    public Long getId() {
+        return getRealId(); // Используем метод для получения ID
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+        this.ID = id;
+        this.Id = id;
+        this.scheduleId = id;
+        this._id = id;
+    }
 
     public LocalDate getDate() { return date; }
     public void setDate(LocalDate date) { this.date = date; }

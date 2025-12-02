@@ -3,6 +3,7 @@ package com.yogabot.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import java.time.Duration;
@@ -21,6 +22,7 @@ public class SupabaseConfig {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(10))
                 .setReadTimeout(Duration.ofSeconds(10))
+                .additionalMessageConverters(new MappingJackson2HttpMessageConverter()) // Добавьте это
                 .build();
     }
 

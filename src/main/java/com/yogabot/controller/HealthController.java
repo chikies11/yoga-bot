@@ -5,11 +5,18 @@ import com.yogabot.service.NotificationService;
 import com.yogabot.service.BotService;
 import com.yogabot.service.SupabaseService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 public class HealthController {
@@ -22,6 +29,12 @@ public class HealthController {
 
     @Autowired
     private BotService botService;
+
+    @Value("${supabase.url}")
+    private String supabaseUrl;
+
+    @Value("${supabase.key}")
+    private String supabaseKey;
 
     @GetMapping("/health")
     public String health() {
@@ -131,6 +144,107 @@ public class HealthController {
             }
 
             return result.toString();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/check-db-structure")
+    public String checkDbStructure() {
+        try {
+            // Используем параметры из application.properties
+            String url = supabaseUrl + "/rest/v1/schedule?date=eq.2025-12-03&select=*";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("apikey", supabaseKey);
+            headers.set("Authorization", "Bearer " + supabaseKey);
+            headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON));
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class);
+
+            StringBuilder result = new StringBuilder();
+            result.append("=== DATABASE STRUCTURE ===\n\n");
+            result.append("URL: ").append(url).append("\n\n");
+            result.append("Response Body:\n").append(response.getBody()).append("\n\n");
+            result.append("Status: ").append(response.getStatusCode()).append("\n");
+
+            return result.toString();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage() + "\nSupabase URL: " + supabaseUrl + "\nSupabase Key: " + (supabaseKey != null ? "***" + supabaseKey.substring(Math.max(0, supabaseKey.length() - 5)) : "null");
+        }
+    }
+
+    @PostMapping("/create-test-schedule")
+    public String createTestSchedule() {
+        try {
+            // Создаем новую запись напрямую через Supabase API
+            String url = supabaseUrl + "/rest/v1/schedule";
+
+            // Создаем объект Map для данных
+            Map<String, Object> scheduleData = new HashMap<>();
+            scheduleData.put("date", "2025-12-08"); // Используем дату в будущем
+            scheduleData.put("morning_time", "08:00");
+            scheduleData.put("morning_class", "ТЕСТОВЫЙ КЛАСС");
+            scheduleData.put("evening_time", "17:00");
+            scheduleData.put("evening_class", "ТЕСТОВЫЙ КЛАСС");
+            scheduleData.put("is_active", true);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("apikey", supabaseKey);
+            headers.set("Authorization", "Bearer " + supabaseKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Prefer", "return=representation"); // Важно! Запрашиваем возврат созданной записи
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(scheduleData, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class);
+
+            StringBuilder result = new StringBuilder();
+            result.append("=== CREATE TEST SCHEDULE ===\n\n");
+            result.append("URL: ").append(url).append("\n\n");
+            result.append("Request Data:\n").append(scheduleData).append("\n\n");
+            result.append("Response Status: ").append(response.getStatusCode()).append("\n");
+            result.append("Response Body:\n").append(response.getBody()).append("\n");
+
+            return result.toString();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage() + "\nSupabase URL: " + supabaseUrl;
+        }
+    }
+
+    @GetMapping("/create-test-schedule-get")
+    public String createTestScheduleGet() {
+        try {
+            // Создаем новую запись напрямую через Supabase API
+            String url = supabaseUrl + "/rest/v1/schedule";
+
+            // Создаем JSON вручную
+            String jsonBody = String.format(
+                    "{\"date\":\"%s\",\"morning_time\":\"08:00\",\"morning_class\":\"ТЕСТОВЫЙ КЛАСС\",\"evening_time\":\"17:00\",\"evening_class\":\"ТЕСТОВЫЙ КЛАСС\",\"is_active\":true}",
+                    LocalDate.now().plusDays(10) // Дата через 10 дней
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("apikey", supabaseKey);
+            headers.set("Authorization", "Bearer " + supabaseKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Prefer", "return=representation");
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, String.class);
+
+            return "Test schedule created!\nResponse: " + response.getBody();
 
         } catch (Exception e) {
             return "Error: " + e.getMessage();
