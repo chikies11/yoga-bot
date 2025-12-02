@@ -68,7 +68,12 @@ public class SupabaseService {
                     url, HttpMethod.GET, entity, Schedule[].class);
 
             Schedule[] schedules = response.getBody();
-            return schedules != null && schedules.length > 0 ? schedules[0] : null;
+            if (schedules != null && schedules.length > 0) {
+                Schedule schedule = schedules[0];
+                System.out.println("✅ Retrieved schedule ID for " + date + ": " + schedule.getId());
+                return schedule;
+            }
+            return null;
         } catch (Exception e) {
             System.err.println("Error getting schedule by date: " + e.getMessage());
             return null;
@@ -90,10 +95,14 @@ public class SupabaseService {
 
                 if (existing == null) {
                     Schedule schedule = createDefaultScheduleForDay(date);
-                    createSchedule(schedule);
-                    System.out.println("Created schedule for: " + date);
+                    Schedule created = createSchedule(schedule); // Измените этот метод
+                    if (created != null) {
+                        System.out.println("✅ Created schedule for: " + date + " with ID: " + created.getId());
+                    } else {
+                        System.out.println("❌ Failed to create schedule for: " + date);
+                    }
                 } else {
-                    System.out.println("Schedule already exists for: " + date);
+                    System.out.println("✅ Schedule already exists for: " + date + " with ID: " + existing.getId());
                 }
             }
 
@@ -108,40 +117,60 @@ public class SupabaseService {
     private Schedule createDefaultScheduleForDay(LocalDate date) {
         String dayOfWeek = date.getDayOfWeek().toString();
 
+        Schedule schedule = new Schedule();
+        schedule.setDate(date);
+        schedule.setActive(true); // Установите явно true или false
+
         switch (dayOfWeek) {
             case "MONDAY":
             case "WEDNESDAY":
             case "THURSDAY":
             case "FRIDAY":
             case "SUNDAY":
-                // Не устанавливаем ID - он будет null
-                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС 8:00 - 11:30",
-                        LocalTime.of(17, 0), "МАЙСОР КЛАСС 17:00 - 20:30", true);
+                schedule.setMorningTime(LocalTime.of(8, 0));
+                schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
+                schedule.setEveningTime(LocalTime.of(17, 0));
+                schedule.setEveningClass("МАЙСОР КЛАСС 17:00 - 20:30");
+                break;
             case "TUESDAY":
-                return new Schedule(date, LocalTime.of(8, 0), "МАЙСОР КЛАСС 8:00 - 11:30",
-                        null, null, true);
+                schedule.setMorningTime(LocalTime.of(8, 0));
+                schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
+                // Вечернего занятия нет
+                break;
             case "SATURDAY":
-                return new Schedule(date, null, "-Отдых-", null, null, false);
+                schedule.setActive(false); // Выходной
+                schedule.setMorningClass("-Отдых-");
+                break;
             default:
-                return new Schedule(date, null, "-Отдых-", null, null, false);
+                schedule.setActive(false);
+                schedule.setMorningClass("-Отдых-");
         }
+
+        return schedule;
     }
 
-    private void createSchedule(Schedule schedule) {
+    private Schedule createSchedule(Schedule schedule) {
         try {
-            String url = supabaseUrl + "/rest/v1/schedule";
+            String url = supabaseUrl + "/rest/v1/schedule?select=*"; // Добавьте select=* чтобы получить созданную запись
 
             HttpHeaders headers = createHeaders();
             HttpEntity<Schedule> entity = new HttpEntity<>(schedule, headers);
 
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.POST, entity, String.class);
+            ResponseEntity<Schedule[]> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity, Schedule[].class);
 
-            System.out.println("Schedule created successfully for: " + schedule.getDate());
+            Schedule[] result = response.getBody();
+            if (result != null && result.length > 0) {
+                Schedule created = result[0];
+                System.out.println("✅ Schedule created successfully for: " + schedule.getDate() + " with ID: " + created.getId());
+                return created;
+            }
+            return null;
 
         } catch (Exception e) {
             System.err.println("Error creating schedule for " + schedule.getDate() + ": " + e.getMessage());
-            throw e;
+            e.printStackTrace();
+            return null;
         }
     }
 
