@@ -130,6 +130,13 @@ public class BotController extends TelegramLongPollingBot {
             String[] parts = data.split("_");
             String action = parts[0]; // subscribe or unsubscribe
             String classType = parts[1].toUpperCase(); // MORNING or EVENING
+
+            // ПРОВЕРКА НА NULL:
+            if (parts.length < 3 || "null".equals(parts[2])) {
+                sendMessage(chatId, "❌ Ошибка: расписание не найдено. Попробуйте позже.");
+                return;
+            }
+
             Long scheduleId = Long.parseLong(parts[2]);
 
             // Сначала сохраняем/обновляем пользователя
@@ -138,7 +145,7 @@ public class BotController extends TelegramLongPollingBot {
                 // Создаем нового пользователя
                 user = new User();
                 user.setTelegramId(userId);
-                user.setAdmin(false); // по умолчанию не админ
+                user.setAdmin(false);
                 supabaseService.saveUser(user);
 
                 // Получаем пользователя с ID из базы
@@ -150,7 +157,7 @@ public class BotController extends TelegramLongPollingBot {
                 return;
             }
 
-            LocalDate classDate = LocalDate.now().plusDays(1); // занятия всегда на завтра
+            LocalDate classDate = LocalDate.now().plusDays(1);
 
             if (action.equals("subscribe")) {
                 supabaseService.subscribeToClass(user.getId(), scheduleId, classType, classDate);
@@ -159,6 +166,9 @@ public class BotController extends TelegramLongPollingBot {
                 supabaseService.unsubscribeFromClass(user.getId(), scheduleId, classType);
                 sendMessage(chatId, "❌ Запись на занятие отменена.");
             }
+        } catch (NumberFormatException e) {
+            sendMessage(chatId, "❌ Ошибка: некорректные данные. Попробуйте позже.");
+            System.err.println("NumberFormatException in handleSubscription: " + e.getMessage());
         } catch (Exception e) {
             sendMessage(chatId, "❌ Произошла ошибка при обработке запроса");
             System.err.println("Error handling subscription: " + e.getMessage());

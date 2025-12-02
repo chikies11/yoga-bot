@@ -69,6 +69,22 @@ public class BotService {
             return message;
         }
 
+        // ДОБАВЬТЕ ЭТУ ПРОВЕРКУ:
+        if (schedule.getId() == null) {
+            System.err.println("⚠️ Schedule ID is null for date: " + date);
+            // Попробуем найти расписание в базе еще раз
+            Schedule dbSchedule = supabaseService.getScheduleByDate(date);
+            if (dbSchedule != null && dbSchedule.getId() != null) {
+                schedule = dbSchedule;
+                System.out.println("✅ Retrieved schedule with ID: " + schedule.getId());
+            } else {
+                System.err.println("❌ Cannot get schedule ID from database");
+                // Отправляем сообщение без кнопок
+                message.setText(createNotificationText(schedule, date));
+                return message;
+            }
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("📣 Напоминание о завтрашних занятиях:\n\n");
 
@@ -93,8 +109,8 @@ public class BotService {
 
         message.setText(sb.toString());
 
-        // Добавляем инлайн-кнопки для записи (если есть занятия)
-        if (hasMorning || hasEvening) {
+        // Добавляем инлайн-кнопки для записи (если есть занятия И есть ID расписания)
+        if ((hasMorning || hasEvening) && schedule.getId() != null) {
             InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
@@ -132,9 +148,40 @@ public class BotService {
 
             keyboardMarkup.setKeyboard(rows);
             message.setReplyMarkup(keyboardMarkup);
+        } else if (hasMorning || hasEvening) {
+            System.err.println("⚠️ Cannot add buttons - schedule ID is null");
         }
 
         return message;
+    }
+
+    // Вспомогательный метод для текста без кнопок
+    private String createNotificationText(Schedule schedule, LocalDate date) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("📣 Напоминание о завтрашних занятиях:\n\n");
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        String dayName = getRussianDayName(date.getDayOfWeek());
+        sb.append("🗓 ").append(dayName).append(" (").append(date.format(formatter)).append(")\n\n");
+
+        boolean hasMorning = schedule.getMorningTime() != null && schedule.getActive();
+        boolean hasEvening = schedule.getEveningTime() != null && schedule.getActive();
+
+        if (hasMorning) {
+            sb.append("🌅 Утреннее занятие:\n");
+            sb.append("⏰ ").append(schedule.getMorningTime()).append("\n");
+            sb.append("🧘 ").append(schedule.getMorningClass()).append("\n\n");
+        }
+
+        if (hasEvening) {
+            sb.append("🌇 Вечернее занятие:\n");
+            sb.append("⏰ ").append(schedule.getEveningTime()).append("\n");
+            sb.append("🧘 ").append(schedule.getEveningClass()).append("\n");
+        }
+
+        sb.append("\n⚠️ Функция записи временно недоступна");
+
+        return sb.toString();
     }
 
     public String getSubscriptionsList(Long scheduleId, String classType) {

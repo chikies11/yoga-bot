@@ -1,7 +1,9 @@
 package com.yogabot.controller;
 
+import com.yogabot.model.Schedule;
 import com.yogabot.service.NotificationService;
 import com.yogabot.service.BotService;
+import com.yogabot.service.SupabaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -13,6 +15,9 @@ public class HealthController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private SupabaseService supabaseService;
 
     @Autowired
     private BotService botService;
@@ -61,6 +66,32 @@ public class HealthController {
             return "Канал настроен на: " + notificationService.getChannelId();
         } catch (Exception e) {
             return "Ошибка получения информации о канале: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/debug-schedule-id")
+    public String debugScheduleId() {
+        try {
+            LocalDate tomorrow = LocalDate.now().plusDays(1);
+            Schedule schedule = supabaseService.getScheduleByDate(tomorrow);
+
+            StringBuilder debug = new StringBuilder();
+            debug.append("=== DEBUG SCHEDULE ID ===\n");
+            debug.append("Date: ").append(tomorrow).append("\n");
+            debug.append("Schedule: ").append(schedule).append("\n");
+
+            if (schedule != null) {
+                debug.append("ID: ").append(schedule.getId()).append("\n");
+                debug.append("Morning: ").append(schedule.getMorningTime()).append("\n");
+                debug.append("Evening: ").append(schedule.getEveningTime()).append("\n");
+                debug.append("Active: ").append(schedule.getActive()).append("\n");
+            } else {
+                debug.append("Schedule is NULL\n");
+            }
+
+            return debug.toString();
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
         }
     }
 }
