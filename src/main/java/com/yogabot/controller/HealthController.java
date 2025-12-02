@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @RestController
 public class HealthController {
@@ -90,6 +91,47 @@ public class HealthController {
             }
 
             return debug.toString();
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    @GetMapping("/force-init")
+    public String forceInitSchedule() {
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+
+            StringBuilder result = new StringBuilder();
+            result.append("=== FORCE INITIALIZE SCHEDULE ===\n\n");
+
+            for (int i = 0; i < 7; i++) {
+                LocalDate date = startOfWeek.plusDays(i);
+                result.append("Processing date: ").append(date).append("\n");
+
+                // Создаем новое расписание
+                Schedule schedule = new Schedule();
+                schedule.setDate(date);
+                schedule.setActive(true);
+
+                if (date.getDayOfWeek().getValue() == 6) { // Суббота
+                    schedule.setActive(false);
+                    schedule.setMorningClass("-Отдых-");
+                } else if (date.getDayOfWeek().getValue() == 2) { // Вторник
+                    schedule.setMorningTime(LocalTime.of(8, 0));
+                    schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
+                } else {
+                    schedule.setMorningTime(LocalTime.of(8, 0));
+                    schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
+                    schedule.setEveningTime(LocalTime.of(17, 0));
+                    schedule.setEveningClass("МАЙСОР КЛАСС 17:00 - 20:30");
+                }
+
+                result.append("Schedule created: ").append(schedule.getMorningClass()).append("\n\n");
+            }
+
+            return result.toString();
+
         } catch (Exception e) {
             return "Error: " + e.getMessage();
         }
