@@ -250,4 +250,33 @@ public class HealthController {
             return "Error: " + e.getMessage();
         }
     }
+
+    @GetMapping("/test-mapping")
+    public String testMapping() {
+        try {
+            LocalDate date = LocalDate.of(2025, 12, 3);
+            Schedule schedule = supabaseService.getScheduleByDate(date);
+
+            if (schedule == null) {
+                return "Schedule not found for date: " + date;
+            }
+
+            StringBuilder result = new StringBuilder();
+            result.append("=== SCHEDULE MAPPING TEST ===\n\n");
+            result.append("Date: ").append(date).append("\n");
+            result.append("Schedule ID: ").append(schedule.getId()).append("\n");
+            result.append("Schedule ID class: ").append(schedule.getId() != null ? schedule.getId().getClass() : "null").append("\n");
+            result.append("ID as Long: ").append(schedule.getIdAsLong()).append("\n");
+            result.append("Morning class: ").append(schedule.getMorningClass()).append("\n");
+            result.append("Evening class: ").append(schedule.getEveningClass()).append("\n");
+            result.append("Active: ").append(schedule.getActive()).append("\n");
+            result.append("Additional properties keys: ").append(schedule.getAdditionalProperties().keySet()).append("\n");
+            result.append("Full object: ").append(schedule.toString()).append("\n");
+
+            return result.toString();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
+        }
+    }
 }

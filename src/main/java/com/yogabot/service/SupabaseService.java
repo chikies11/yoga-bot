@@ -60,22 +60,48 @@ public class SupabaseService {
 
     public Schedule getScheduleByDate(LocalDate date) {
         try {
-            String query = String.format("date=eq.%s", date);
+            // Добавляем select=* чтобы получить все поля, включая ID
+            String query = String.format("date=eq.%s&select=*", date);
             String url = supabaseUrl + "/rest/v1/schedule?" + query;
+
+            System.out.println("🔍 Fetching schedule from URL: " + url);
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<Schedule[]> response = restTemplate.exchange(
                     url, HttpMethod.GET, entity, Schedule[].class);
 
             Schedule[] schedules = response.getBody();
+
             if (schedules != null && schedules.length > 0) {
                 Schedule schedule = schedules[0];
-                System.out.println("✅ Retrieved schedule ID for " + date + ": " + schedule.getId());
+
+                // ДЛЯ ОТЛАДКИ: выводим все что получили
+                System.out.println("✅ Retrieved schedule for " + date + ":");
+                System.out.println("   ID: " + schedule.getId());
+                System.out.println("   ID type: " + (schedule.getId() != null ? schedule.getId().getClass() : "null"));
+                System.out.println("   Additional properties: " + schedule.getAdditionalProperties());
+
+                // Проверяем ID в additionalProperties
+                if (schedule.getId() == null && schedule.getAdditionalProperties().containsKey("id")) {
+                    Object idValue = schedule.getAdditionalProperties().get("id");
+                    System.out.println("   ID in additionalProperties: " + idValue + " (type: " + (idValue != null ? idValue.getClass() : "null") + ")");
+
+                    // Пробуем конвертировать
+                    if (idValue instanceof Number) {
+                        schedule.setId(((Number) idValue).intValue());
+                        System.out.println("   ✅ Converted ID to Integer: " + schedule.getId());
+                    }
+                }
+
                 return schedule;
             }
+
+            System.out.println("❌ No schedule found for date: " + date);
             return null;
+
         } catch (Exception e) {
-            System.err.println("Error getting schedule by date: " + e.getMessage());
+            System.err.println("❌ Error getting schedule by date: " + e.getMessage());
+            e.printStackTrace();
             return null;
         }
     }

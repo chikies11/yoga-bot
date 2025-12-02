@@ -27,10 +27,10 @@ public class NotificationService {
     public void sendDailyNotification() {
         try {
             LocalDate tomorrow = LocalDate.now().plusDays(1);
-            SendMessage message = botService.createNotificationMessage(tomorrow);
+            SendMessage message = botService.createNotificationMessage(tomorrow); // Вызов BotService
             message.setChatId(channelId);
 
-            botController.execute(message);
+            botController.execute(message); // Только для отправки
             System.out.println("✅ Sent notification to channel at: " + LocalDateTime.now());
 
         } catch (Exception e) {

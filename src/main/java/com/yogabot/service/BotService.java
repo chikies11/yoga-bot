@@ -69,19 +69,21 @@ public class BotService {
             return message;
         }
 
-        // ДОБАВЬТЕ ЭТУ ПРОВЕРКУ:
-        if (schedule.getId() == null) {
-            System.err.println("⚠️ Schedule ID is null for date: " + date);
-            // Попробуем найти расписание в базе еще раз
-            Schedule dbSchedule = supabaseService.getScheduleByDate(date);
-            if (dbSchedule != null && dbSchedule.getId() != null) {
-                schedule = dbSchedule;
-                System.out.println("✅ Retrieved schedule with ID: " + schedule.getId());
-            } else {
-                System.err.println("❌ Cannot get schedule ID from database");
-                // Отправляем сообщение без кнопок
-                message.setText(createNotificationText(schedule, date));
-                return message;
+        // ДОБАВЬТЕ ОТЛАДОЧНЫЕ ВЫВОДЫ:
+        System.out.println("🔍 Creating notification for date: " + date);
+        System.out.println("   Schedule ID: " + schedule.getId());
+        System.out.println("   Schedule ID type: " + (schedule.getId() != null ? schedule.getId().getClass() : "null"));
+        System.out.println("   Additional props: " + schedule.getAdditionalProperties());
+
+        // Получаем ID как Long
+        Long scheduleId = null;
+        if (schedule.getId() != null) {
+            scheduleId = schedule.getId().longValue();
+        } else if (schedule.getAdditionalProperties().containsKey("id")) {
+            Object idObj = schedule.getAdditionalProperties().get("id");
+            if (idObj instanceof Number) {
+                scheduleId = ((Number) idObj).longValue();
+                System.out.println("   Extracted ID from additionalProps: " + scheduleId);
             }
         }
 
@@ -110,7 +112,9 @@ public class BotService {
         message.setText(sb.toString());
 
         // Добавляем инлайн-кнопки для записи (если есть занятия И есть ID расписания)
-        if ((hasMorning || hasEvening) && schedule.getId() != null) {
+        if ((hasMorning || hasEvening) && scheduleId != null) {
+            System.out.println("✅ Adding inline buttons with scheduleId: " + scheduleId);
+
             InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
@@ -119,11 +123,11 @@ public class BotService {
 
                 InlineKeyboardButton morningSubscribe = new InlineKeyboardButton();
                 morningSubscribe.setText("📝 Записаться на утро");
-                morningSubscribe.setCallbackData("subscribe_morning_" + schedule.getId());
+                morningSubscribe.setCallbackData("subscribe_morning_" + scheduleId);
 
                 InlineKeyboardButton morningUnsubscribe = new InlineKeyboardButton();
                 morningUnsubscribe.setText("❌ Отменить утро");
-                morningUnsubscribe.setCallbackData("unsubscribe_morning_" + schedule.getId());
+                morningUnsubscribe.setCallbackData("unsubscribe_morning_" + scheduleId);
 
                 morningRow.add(morningSubscribe);
                 morningRow.add(morningUnsubscribe);
@@ -135,11 +139,11 @@ public class BotService {
 
                 InlineKeyboardButton eveningSubscribe = new InlineKeyboardButton();
                 eveningSubscribe.setText("📝 Записаться на вечер");
-                eveningSubscribe.setCallbackData("subscribe_evening_" + schedule.getId());
+                eveningSubscribe.setCallbackData("subscribe_evening_" + scheduleId);
 
                 InlineKeyboardButton eveningUnsubscribe = new InlineKeyboardButton();
                 eveningUnsubscribe.setText("❌ Отменить вечер");
-                eveningUnsubscribe.setCallbackData("unsubscribe_evening_" + schedule.getId());
+                eveningUnsubscribe.setCallbackData("unsubscribe_evening_" + scheduleId);
 
                 eveningRow.add(eveningSubscribe);
                 eveningRow.add(eveningUnsubscribe);
@@ -148,8 +152,13 @@ public class BotService {
 
             keyboardMarkup.setKeyboard(rows);
             message.setReplyMarkup(keyboardMarkup);
+            System.out.println("✅ Successfully added inline buttons");
         } else if (hasMorning || hasEvening) {
             System.err.println("⚠️ Cannot add buttons - schedule ID is null");
+            System.err.println("   hasMorning: " + hasMorning);
+            System.err.println("   hasEvening: " + hasEvening);
+            System.err.println("   scheduleId: " + scheduleId);
+            System.err.println("   schedule.getId(): " + schedule.getId());
         }
 
         return message;

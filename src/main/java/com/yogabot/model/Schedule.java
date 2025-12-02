@@ -4,37 +4,35 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalTimeSerializer;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Map;
+import java.util.HashMap;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Schedule {
 
-    // Пробуем разные варианты аннотаций для ID
+    // Основное поле ID - используем Integer вместо Long
     @JsonProperty("id")
-    private Long id;
-
-    @JsonProperty("ID")
-    private Long ID;
-
-    @JsonProperty("Id")
-    private Long Id;
-
-    @JsonProperty("schedule_id")
-    private Long scheduleId;
-
-    @JsonProperty("_id")
-    private Long _id;
+    private Integer id;
 
     @JsonProperty("date")
     private LocalDate date;
 
     @JsonProperty("morning_time")
+    @JsonDeserialize(using = LocalTimeDeserializer.class)
+    @JsonSerialize(using = LocalTimeSerializer.class)
     private LocalTime morningTime;
 
     @JsonProperty("evening_time")
+    @JsonDeserialize(using = LocalTimeDeserializer.class)
+    @JsonSerialize(using = LocalTimeSerializer.class)
     private LocalTime eveningTime;
 
     @JsonProperty("morning_class")
@@ -46,27 +44,41 @@ public class Schedule {
     @JsonProperty("is_active")
     private Boolean active;
 
-    // Getters and Setters
-    public Long getRealId() {
-        if (id != null) return id;
-        if (ID != null) return ID;
-        if (Id != null) return Id;
-        if (scheduleId != null) return scheduleId;
-        if (_id != null) return _id;
-        return null;
+    // Дополнительные поля которые есть в БД но не нужны в логике
+    @JsonProperty("created_at")
+    private String createdAt;
+
+    @JsonProperty("updated_at")
+    private String updatedAt;
+
+    // Для отладки - сохраняем все полученные поля
+    private Map<String, Object> additionalProperties = new HashMap<>();
+
+    // Конструкторы
+    public Schedule() {}
+
+    public Schedule(LocalDate date, LocalTime morningTime, String morningClass,
+                    LocalTime eveningTime, String eveningClass, Boolean active) {
+        this.date = date;
+        this.morningTime = morningTime;
+        this.morningClass = morningClass;
+        this.eveningTime = eveningTime;
+        this.eveningClass = eveningClass;
+        this.active = active;
     }
 
-    // Обновите все геттеры и сеттеры
-    public Long getId() {
-        return getRealId(); // Используем метод для получения ID
+    // Getters and Setters - ИСПРАВЬТЕ ТИП ID на Integer
+    public Integer getId() {
+        return id;
     }
 
-    public void setId(Long id) {
+    public void setId(Integer id) {
         this.id = id;
-        this.ID = id;
-        this.Id = id;
-        this.scheduleId = id;
-        this._id = id;
+    }
+
+    // Метод для получения ID как Long (для обратной совместимости)
+    public Long getIdAsLong() {
+        return id != null ? id.longValue() : null;
     }
 
     public LocalDate getDate() { return date; }
@@ -89,4 +101,35 @@ public class Schedule {
 
     // Для обратной совместимости
     public Boolean isActive() { return active; }
+
+    // Getters and Setters для дополнительных полей
+    public String getCreatedAt() { return createdAt; }
+    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
+
+    public String getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(String updatedAt) { this.updatedAt = updatedAt; }
+
+    // Метод для захвата любых других полей
+    @JsonAnySetter
+    public void setAdditionalProperty(String name, Object value) {
+        additionalProperties.put(name, value);
+        System.out.println("Captured field: " + name + " = " + value);
+    }
+
+    @JsonAnyGetter
+    public Map<String, Object> getAdditionalProperties() {
+        return additionalProperties;
+    }
+
+    @Override
+    public String toString() {
+        return "Schedule{" +
+                "id=" + id +
+                ", date=" + date +
+                ", morningTime=" + morningTime +
+                ", morningClass='" + morningClass + '\'' +
+                ", active=" + active +
+                ", additionalFields=" + additionalProperties.keySet() +
+                '}';
+    }
 }
