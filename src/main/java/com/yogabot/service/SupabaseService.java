@@ -63,12 +63,15 @@ public class SupabaseService {
     // Используемые методы:
 
     // Schedule methods
-    public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
+    // startDay теперь всегда будет LocalDate.now()
+    public List<Schedule> getWeeklySchedule(LocalDate startDay) {
         try {
-            LocalDate endOfWeek = startOfWeek.plusDays(6);
+            // Устанавливаем конец периода: 6 дней после начала (всего 7 дней, включая startDay)
+            LocalDate endDay = startDay.plusDays(6);
 
-            String query = String.format("date.gte.%s&date.lte.%s&order=date",
-                    startOfWeek, endOfWeek);
+            // Запрос теперь ищет расписание в диапазоне [startDay, endDay]
+            String query = String.format("date=gte.%s&date=lte.%s&order=date",
+                    startDay.toString(), endDay.toString());
 
             String url = supabaseUrl + "/rest/v1/schedule?" + query;
 
@@ -77,9 +80,13 @@ public class SupabaseService {
                     url, HttpMethod.GET, entity, Schedule[].class);
 
             Schedule[] schedules = response.getBody();
+
+            // Если расписание есть, возвращаем его
             return schedules != null ? Arrays.asList(schedules) : Collections.emptyList();
+
         } catch (Exception e) {
             System.err.println("Error getting weekly schedule: " + e.getMessage());
+            // Обработка ошибки
             return Collections.emptyList();
         }
     }

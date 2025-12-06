@@ -29,32 +29,58 @@ public class BotService {
     }
 
     public String getWeeklySchedule() {
+        // 1. Устанавливаем текущую дату как начало периода
         LocalDate today = LocalDate.now();
-        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
-        List<Schedule> schedules = supabaseService.getWeeklySchedule(startOfWeek);
+
+        // 2. Вызываем SupabaseService для получения расписания с сегодняшнего дня
+        // Мы передаем именно today, чтобы не отображались прошедшие дни
+        List<Schedule> schedules = supabaseService.getWeeklySchedule(today);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("📅 Расписание на текущую неделю:\n\n");
+        sb.append("📅 Расписание на следующие 7 дней (начиная с сегодня):\\n\\n");
 
+        // 3. Форматирование расписания
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-        for (Schedule schedule : schedules) {
-            String dayName = getRussianDayName(schedule.getDate().getDayOfWeek());
-            sb.append("🗓 ").append(dayName).append(" (").append(schedule.getDate().format(dateFormatter)).append("):\n");
+        // Словарь для удобной группировки расписания по дате
+        // List<Schedule> уже должен быть отсортирован по дате из БД (SupabaseService)
 
-            if (schedule.getMorningTime() != null && schedule.isActive()) {
-                sb.append("🌅 ").append(schedule.getMorningClass()).append("\n");
+        LocalDate currentDate = today;
+        int daysDisplayed = 0;
+        int scheduleIndex = 0;
+
+        // Отображаем расписание на 7 дней
+        while (daysDisplayed < 7) {
+
+            // Получаем русское название дня и форматируем дату
+            String dayName = getRussianDayName(currentDate.getDayOfWeek());
+            String formattedDate = currentDate.format(dateFormatter);
+
+            sb.append("🔸 ").append(dayName).append(", ").append(formattedDate).append(":\n");
+
+            // Ищем расписание для текущей даты
+            Schedule scheduleForDay = null;
+            if (scheduleIndex < schedules.size() && schedules.get(scheduleIndex).getDate().isEqual(currentDate)) {
+                scheduleForDay = schedules.get(scheduleIndex);
+                scheduleIndex++;
             }
 
-            if (schedule.getEveningTime() != null && schedule.isActive()) {
-                sb.append("🌇 ").append(schedule.getEveningClass()).append("\n");
+            if (scheduleForDay != null && scheduleForDay.isActive()) {
+                // Утреннее занятие
+                if (scheduleForDay.getMorningTime() != null && scheduleForDay.getMorningClass() != null) {
+                    sb.append("   - Утро (").append(scheduleForDay.getMorningTime()).append("): ").append(scheduleForDay.getMorningClass()).append("\n");
+                }
+                // Вечернее занятие
+                if (scheduleForDay.getEveningTime() != null && scheduleForDay.getEveningClass() != null) {
+                    sb.append("   - Вечер (").append(scheduleForDay.getEveningTime()).append("): ").append(scheduleForDay.getEveningClass()).append("\n");
+                }
+            } else {
+                sb.append("   - Занятий нет.\n");
             }
-
-            if ((schedule.getMorningTime() == null && schedule.getEveningTime() == null) || !schedule.isActive()) {
-                sb.append("💤 ").append(schedule.getMorningClass() != null ? schedule.getMorningClass() : "Отдых").append("\n");
-            }
-
             sb.append("\n");
+
+            currentDate = currentDate.plusDays(1);
+            daysDisplayed++;
         }
 
         return sb.toString();
