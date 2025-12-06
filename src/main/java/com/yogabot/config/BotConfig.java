@@ -1,9 +1,9 @@
 package com.yogabot.config;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+// Аннотации @Bean удалены. Значения будут инжектироваться напрямую через @Value
 @Configuration
 public class BotConfig {
 
@@ -19,22 +19,18 @@ public class BotConfig {
     @Value("${admin.telegram.id}")
     private Long adminTelegramId;
 
-    @Bean
     public String getBotToken() {
         return botToken;
     }
 
-    @Bean
     public String getBotUsername() {
         return botUsername;
     }
 
-    @Bean
     public String getChannelId() {
         return channelId;
     }
 
-    @Bean
     public Long getAdminTelegramId() {
         return adminTelegramId;
     }

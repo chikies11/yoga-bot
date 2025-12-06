@@ -20,6 +20,7 @@ public class SupabaseService {
     @Autowired
     private RestTemplate restTemplate;
 
+    // Свойства инжектируются напрямую, как и раньше
     @Value("${supabase.url}")
     private String supabaseUrl;
 
@@ -32,6 +33,31 @@ public class SupabaseService {
         headers.set("Authorization", "Bearer " + supabaseKey);
         headers.setContentType(MediaType.APPLICATION_JSON);
         return headers;
+    }
+
+    public String checkUserConnection() {
+        System.out.println("Executing Supabase connection check...");
+        try {
+            // Запрос, который просто проверяет, что таблица 'users' доступна
+            String url = supabaseUrl + "/rest/v1/users?limit=1&select=*";
+
+            HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+
+            // Выполнение запроса
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return "✅ Supabase connection successful! Status: " + response.getStatusCodeValue() +
+                        ". Data length: " + response.getBody().length();
+            } else {
+                return "❌ Supabase connection failed. Status: " + response.getStatusCodeValue();
+            }
+
+        } catch (Exception e) {
+            System.err.println("Error connecting to Supabase: " + e.getMessage());
+            return "❌ Error connecting to Supabase: " + e.getMessage();
+        }
     }
 
     // Используемые методы:
@@ -103,6 +129,34 @@ public class SupabaseService {
             System.err.println("❌ Error getting schedule by date: " + e.getMessage());
             e.printStackTrace();
             return null;
+        }
+    }
+
+    public String checkDbStructureStatus() {
+        try {
+            // Используем параметры из application.properties
+            String url = supabaseUrl + "/rest/v1/schedule?date=eq.2025-12-03&select=*";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("apikey", supabaseKey);
+            headers.set("Authorization", "Bearer " + supabaseKey);
+            headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON));
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class);
+
+            StringBuilder result = new StringBuilder();
+            result.append("=== DATABASE STRUCTURE ===\n\n");
+            result.append("URL: ").append(url).append("\n\n");
+            result.append("Response Body:\n").append(response.getBody()).append("\n\n");
+            result.append("Status: ").append(response.getStatusCode()).append("\n");
+
+            return result.toString();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage() + "\nSupabase URL: " + supabaseUrl + "\nSupabase Key: " + (supabaseKey != null ? "***" + supabaseKey.substring(Math.max(0, supabaseKey.length() - 5)) : "null");
         }
     }
 

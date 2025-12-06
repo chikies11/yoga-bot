@@ -22,13 +22,11 @@ COPY --from=builder /app/target/yoga-telegram-bot-1.0.0.jar app.jar
 
 EXPOSE 8080
 
-# Health check (уберите если нет эндпоинта /health)
+# Health check (использует /actuator/health, который теперь доступен благодаря Actuator)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
-# Оптимизированные JVM параметры
+# ОПТИМИЗИРОВАННЫЕ JVM параметры: Удалили -Xmx/-Xms, оставив адаптивные настройки
 CMD java -XX:+UseContainerSupport \
          -XX:MaxRAMPercentage=75.0 \
-         -Xmx512m \
-         -Xms256m \
          -jar app.jar

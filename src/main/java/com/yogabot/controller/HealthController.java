@@ -30,12 +30,6 @@ public class HealthController {
     @Autowired
     private BotService botService;
 
-    @Value("${supabase.url}")
-    private String supabaseUrl;
-
-    @Value("${supabase.key}")
-    private String supabaseKey;
-
     @GetMapping("/health")
     public String health() {
         return "✅ Yoga Bot is alive! Time: " + LocalDateTime.now();
@@ -152,102 +146,18 @@ public class HealthController {
 
     @GetMapping("/check-db-structure")
     public String checkDbStructure() {
-        try {
-            // Используем параметры из application.properties
-            String url = supabaseUrl + "/rest/v1/schedule?date=eq.2025-12-03&select=*";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("apikey", supabaseKey);
-            headers.set("Authorization", "Bearer " + supabaseKey);
-            headers.setAccept(Arrays.asList(MediaType.APPLICATION_JSON));
-
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            RestTemplate restTemplate = new RestTemplate();
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, String.class);
-
-            StringBuilder result = new StringBuilder();
-            result.append("=== DATABASE STRUCTURE ===\n\n");
-            result.append("URL: ").append(url).append("\n\n");
-            result.append("Response Body:\n").append(response.getBody()).append("\n\n");
-            result.append("Status: ").append(response.getStatusCode()).append("\n");
-
-            return result.toString();
-
-        } catch (Exception e) {
-            return "Error: " + e.getMessage() + "\nSupabase URL: " + supabaseUrl + "\nSupabase Key: " + (supabaseKey != null ? "***" + supabaseKey.substring(Math.max(0, supabaseKey.length() - 5)) : "null");
-        }
+        // Этот метод ДОЛЖЕН БЫТЬ реализован в SupabaseService
+        return supabaseService.checkDbStructureStatus();
     }
 
-    @PostMapping("/create-test-schedule")
-    public String createTestSchedule() {
+    @PostMapping("/create-test-schedule") // Предположим, это был этот метод
+    public String initializeSchedule() {
         try {
-            // Создаем новую запись напрямую через Supabase API
-            String url = supabaseUrl + "/rest/v1/schedule";
-
-            // Создаем объект Map для данных
-            Map<String, Object> scheduleData = new HashMap<>();
-            scheduleData.put("date", "2025-12-08"); // Используем дату в будущем
-            scheduleData.put("morning_time", "08:00");
-            scheduleData.put("morning_class", "ТЕСТОВЫЙ КЛАСС");
-            scheduleData.put("evening_time", "17:00");
-            scheduleData.put("evening_class", "ТЕСТОВЫЙ КЛАСС");
-            scheduleData.put("is_active", true);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("apikey", supabaseKey);
-            headers.set("Authorization", "Bearer " + supabaseKey);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Prefer", "return=representation"); // Важно! Запрашиваем возврат созданной записи
-
-            RestTemplate restTemplate = new RestTemplate();
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(scheduleData, headers);
-
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.POST, entity, String.class);
-
-            StringBuilder result = new StringBuilder();
-            result.append("=== CREATE TEST SCHEDULE ===\n\n");
-            result.append("URL: ").append(url).append("\n\n");
-            result.append("Request Data:\n").append(scheduleData).append("\n\n");
-            result.append("Response Status: ").append(response.getStatusCode()).append("\n");
-            result.append("Response Body:\n").append(response.getBody()).append("\n");
-
-            return result.toString();
-
+            // Весь код инициализации находится в сервисе
+            supabaseService.initializeDefaultSchedule();
+            return "Расписание успешно инициализировано!";
         } catch (Exception e) {
-            return "Error: " + e.getMessage() + "\nSupabase URL: " + supabaseUrl;
-        }
-    }
-
-    @GetMapping("/create-test-schedule-get")
-    public String createTestScheduleGet() {
-        try {
-            // Создаем новую запись напрямую через Supabase API
-            String url = supabaseUrl + "/rest/v1/schedule";
-
-            // Создаем JSON вручную
-            String jsonBody = String.format(
-                    "{\"date\":\"%s\",\"morning_time\":\"08:00\",\"morning_class\":\"ТЕСТОВЫЙ КЛАСС\",\"evening_time\":\"17:00\",\"evening_class\":\"ТЕСТОВЫЙ КЛАСС\",\"is_active\":true}",
-                    LocalDate.now().plusDays(10) // Дата через 10 дней
-            );
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("apikey", supabaseKey);
-            headers.set("Authorization", "Bearer " + supabaseKey);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Prefer", "return=representation");
-
-            RestTemplate restTemplate = new RestTemplate();
-            HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
-
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.POST, entity, String.class);
-
-            return "Test schedule created!\nResponse: " + response.getBody();
-
-        } catch (Exception e) {
-            return "Error: " + e.getMessage();
+            return "Ошибка при инициализации: " + e.getMessage();
         }
     }
 
@@ -282,22 +192,7 @@ public class HealthController {
 
     @GetMapping("/check-users-table")
     public String checkUsersTable() {
-        try {
-            String url = "https://lzejwvnyybaqaxjzttoz.supabase.co/rest/v1/users?limit=1&select=*";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("apikey", supabaseKey);
-            headers.set("Authorization", "Bearer " + supabaseKey);
-
-            RestTemplate restTemplate = new RestTemplate();
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, String.class);
-
-            return "Users table structure:\n" + response.getBody();
-
-        } catch (Exception e) {
-            return "Error: " + e.getMessage();
-        }
+        // Логика проверки БД перенесена в SupabaseService
+        return supabaseService.checkUserConnection();
     }
 }

@@ -22,16 +22,15 @@ public class SupabaseConfig {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(10))
                 .setReadTimeout(Duration.ofSeconds(10))
-                .additionalMessageConverters(new MappingJackson2HttpMessageConverter()) // Добавьте это
+                .additionalMessageConverters(new MappingJackson2HttpMessageConverter())
                 .build();
     }
 
-    @Bean
+    // Аннотации @Bean удалены. Значения будут инжектироваться напрямую в SupabaseService
     public String getSupabaseUrl() {
         return supabaseUrl;
     }
 
-    @Bean
     public String getSupabaseKey() {
         return supabaseKey;
     }

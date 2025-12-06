@@ -28,17 +28,18 @@ import java.util.List;
 @Component
 public class BotController extends TelegramLongPollingBot {
 
-    @Autowired
-    private BotService botService;
-
-    @Autowired
-    private SupabaseService supabaseService;
-
+    // Прямое внедрение свойств из application.properties
     @Value("${telegram.bot.token}")
     private String botToken;
 
     @Value("${telegram.bot.username}")
     private String botUsername;
+
+    @Autowired
+    private BotService botService;
+
+    @Autowired
+    private SupabaseService supabaseService;
 
     @Override
     public String getBotUsername() {
