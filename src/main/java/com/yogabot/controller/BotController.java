@@ -1,11 +1,11 @@
 package com.yogabot.controller;
 
+import com.yogabot.model.BotUser;
 import com.yogabot.model.Schedule;
 import com.yogabot.model.Subscription;
 import com.yogabot.service.BotService;
 import com.yogabot.service.SupabaseService;
 import com.yogabot.util.KeyboardUtil;
-import com.yogabot.model.User;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -15,6 +15,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -62,6 +63,18 @@ public class BotController extends TelegramLongPollingBot {
         Long chatId = message.getChatId();
         String text = message.getText();
         Long userId = message.getFrom().getId();
+
+        // Сохраняем пользователя при любом сообщении в боте
+        BotUser botUser = supabaseService.getBotUserByTelegramId(userId);
+        if (botUser == null) {
+            botUser = new BotUser();
+            botUser.setTelegramId(userId);
+            botUser.setFirstName(message.getFrom().getFirstName());
+            botUser.setLastName(message.getFrom().getLastName());
+            botUser.setUsername(message.getFrom().getUserName());
+            supabaseService.saveOrUpdateBotUser(botUser);
+            System.out.println("✅ User saved from message: " + userId);
+        }
 
         boolean isAdmin = botService.isAdmin(userId);
 
@@ -125,54 +138,49 @@ public class BotController extends TelegramLongPollingBot {
         sendMessage(chatId, text);
     }
 
-    private void handleSubscription(String data, Long userId, Long chatId) {
+    private void handleSubscription(String data, Long userId, Long chatId,
+                                    org.telegram.telegrambots.meta.api.objects.User telegramUser) {
         try {
+            System.out.println("🔄 Handling subscription: " + data + " for user: " + userId);
+            System.out.println("   User info: " + telegramUser.getFirstName() + " " + telegramUser.getLastName());
+
             String[] parts = data.split("_");
             String action = parts[0]; // subscribe or unsubscribe
             String classType = parts[1].toUpperCase(); // MORNING or EVENING
+            Integer scheduleId = Integer.parseInt(parts[2]);
 
-            // ПРОВЕРКА НА NULL:
-            if (parts.length < 3 || "null".equals(parts[2])) {
-                sendMessage(chatId, "❌ Ошибка: расписание не найдено. Попробуйте позже.");
-                return;
-            }
-
-            Long scheduleId = Long.parseLong(parts[2]);
-
-            // Сначала сохраняем/обновляем пользователя
-            User user = supabaseService.getUserByTelegramId(userId);
-            if (user == null) {
-                // Создаем нового пользователя
-                user = new User();
-                user.setTelegramId(userId);
-                user.setAdmin(false);
-                supabaseService.saveUser(user);
-
-                // Получаем пользователя с ID из базы
-                user = supabaseService.getUserByTelegramId(userId);
-            }
-
-            if (user == null) {
-                sendMessage(chatId, "❌ Ошибка: не удалось создать пользователя");
-                return;
+            // Сохраняем/обновляем пользователя в БД
+            BotUser botUser = supabaseService.getBotUserByTelegramId(userId);
+            if (botUser == null) {
+                botUser = new BotUser();
+                botUser.setTelegramId(userId);
+                botUser.setFirstName(telegramUser.getFirstName());
+                botUser.setLastName(telegramUser.getLastName());
+                botUser.setUsername(telegramUser.getUserName());
+                supabaseService.saveOrUpdateBotUser(botUser);
+                System.out.println("✅ User saved: " + userId + " - " + botUser.getDisplayName());
+            } else {
+                System.out.println("✅ User already exists: " + botUser.getDisplayName());
             }
 
             LocalDate classDate = LocalDate.now().plusDays(1);
 
             if (action.equals("subscribe")) {
-                supabaseService.subscribeToClass(user.getId(), scheduleId, classType, classDate);
+                supabaseService.subscribeToClass(userId, scheduleId.longValue(), classType, classDate);
                 sendMessage(chatId, "✅ Вы успешно записались на занятие!");
+                System.out.println("✅ Subscribed to class: " + scheduleId + " - " + classType);
             } else {
-                supabaseService.unsubscribeFromClass(user.getId(), scheduleId, classType);
+                supabaseService.unsubscribeFromClass(userId, scheduleId.longValue(), classType);
                 sendMessage(chatId, "❌ Запись на занятие отменена.");
+                System.out.println("✅ Unsubscribed from class: " + scheduleId + " - " + classType);
             }
-        } catch (NumberFormatException e) {
-            sendMessage(chatId, "❌ Ошибка: некорректные данные. Попробуйте позже.");
-            System.err.println("NumberFormatException in handleSubscription: " + e.getMessage());
+
+            System.out.println("✅ Subscription handled successfully!");
+
         } catch (Exception e) {
-            sendMessage(chatId, "❌ Произошла ошибка при обработке запроса");
-            System.err.println("Error handling subscription: " + e.getMessage());
+            System.err.println("❌ Error in handleSubscription: " + e.getMessage());
             e.printStackTrace();
+            sendMessage(chatId, "❌ Произошла ошибка при обработке запроса.");
         }
     }
 
@@ -245,6 +253,12 @@ public class BotController extends TelegramLongPollingBot {
 
     private void sendSubscriptionsMenu(Long chatId) {
         try {
+            boolean isAdmin = botService.isAdmin(chatId);
+            if (!isAdmin) {
+                sendMessage(chatId, "⛔ Функция просмотра записей доступна только администратору.");
+                return;
+            }
+
             LocalDate startOfWeek = LocalDate.now().minusDays(LocalDate.now().getDayOfWeek().getValue() - 1);
             List<Schedule> schedules = supabaseService.getWeeklySchedule(startOfWeek);
 
@@ -259,19 +273,19 @@ public class BotController extends TelegramLongPollingBot {
             for (Schedule schedule : schedules) {
                 String dayName = botService.getRussianDayName(schedule.getDate().getDayOfWeek());
 
-                if (schedule.getMorningTime() != null) {
+                if (schedule.getMorningTime() != null && schedule.isActive()) {
                     List<InlineKeyboardButton> morningRow = new ArrayList<>();
                     InlineKeyboardButton morningButton = new InlineKeyboardButton();
-                    morningButton.setText("📋 " + dayName + " Утро");
+                    morningButton.setText("📋 " + dayName + " Утро (" + schedule.getMorningTime() + ")");
                     morningButton.setCallbackData("view_morning_" + schedule.getId());
                     morningRow.add(morningButton);
                     rows.add(morningRow);
                 }
 
-                if (schedule.getEveningTime() != null) {
+                if (schedule.getEveningTime() != null && schedule.isActive()) {
                     List<InlineKeyboardButton> eveningRow = new ArrayList<>();
                     InlineKeyboardButton eveningButton = new InlineKeyboardButton();
-                    eveningButton.setText("📋 " + dayName + " Вечер");
+                    eveningButton.setText("📋 " + dayName + " Вечер (" + schedule.getEveningTime() + ")");
                     eveningButton.setCallbackData("view_evening_" + schedule.getId());
                     eveningRow.add(eveningButton);
                     rows.add(eveningRow);
@@ -407,8 +421,12 @@ public class BotController extends TelegramLongPollingBot {
         Long userId = callbackQuery.getFrom().getId();
         Long chatId = callbackQuery.getMessage().getChatId();
 
+        // Получаем информацию о пользователе из callbackQuery
+        org.telegram.telegrambots.meta.api.objects.User telegramUser = callbackQuery.getFrom();
+
         if (data.startsWith("subscribe_") || data.startsWith("unsubscribe_")) {
-            handleSubscription(data, userId, chatId);
+            // Передаем 4 параметра: data, userId, chatId, telegramUser
+            handleSubscription(data, userId, chatId, telegramUser);
         }
         else if (data.startsWith("view_morning_") || data.startsWith("view_evening_")) {
             handleViewSubscriptions(data, chatId);
@@ -446,11 +464,17 @@ public class BotController extends TelegramLongPollingBot {
 
             for (int i = 0; i < subscriptions.size(); i++) {
                 Subscription subscription = subscriptions.get(i);
-                User user = supabaseService.getUserByTelegramId(subscription.getUserId());
+
+                // ИСПРАВЛЕНИЕ: используем getTelegramId() вместо getUserId()
+                BotUser user = supabaseService.getBotUserByTelegramId(subscription.getTelegramId());
+
                 if (user != null) {
-                    String userName = user.getUsername() != null ? "@" + user.getUsername() :
-                            user.getFirstName() + " " + user.getLastName();
+                    // Используем метод getDisplayName() из BotUser
+                    String userName = user.getDisplayName();
                     sb.append(i + 1).append(". ").append(userName).append("\n");
+                } else {
+                    // Если пользователь не найден, показываем только ID
+                    sb.append(i + 1).append(". Пользователь ID: ").append(subscription.getTelegramId()).append("\n");
                 }
             }
 
@@ -458,6 +482,7 @@ public class BotController extends TelegramLongPollingBot {
 
         } catch (Exception e) {
             sendMessage(chatId, "Ошибка при загрузке записей: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

@@ -1,7 +1,7 @@
 package com.yogabot.service;
 
+import com.yogabot.model.BotUser;
 import com.yogabot.model.Schedule;
-import com.yogabot.model.User;
 import com.yogabot.model.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -206,11 +206,14 @@ public class BotService {
 
         for (int i = 0; i < subscriptions.size(); i++) {
             Subscription subscription = subscriptions.get(i);
-            User user = supabaseService.getUserByTelegramId(subscription.getUserId());
+            // ИСПРАВЛЕНИЕ: используем getBotUserByTelegramId
+            BotUser user = supabaseService.getBotUserByTelegramId(subscription.getTelegramId());
+
             if (user != null) {
-                String userName = user.getUsername() != null ? "@" + user.getUsername() :
-                        user.getFirstName() + " " + user.getLastName();
+                String userName = user.getDisplayName();
                 sb.append(i + 1).append(". ").append(userName).append("\n");
+            } else {
+                sb.append(i + 1).append(". Пользователь ID: ").append(subscription.getTelegramId()).append("\n");
             }
         }
 

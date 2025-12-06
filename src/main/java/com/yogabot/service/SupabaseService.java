@@ -1,7 +1,7 @@
 package com.yogabot.service;
 
+import com.yogabot.model.BotUser;
 import com.yogabot.model.Schedule;
-import com.yogabot.model.User;
 import com.yogabot.model.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -200,42 +200,45 @@ public class SupabaseService {
         }
     }
 
-    // User methods
-    public User getUserByTelegramId(Long telegramId) {
+    // Методы для BotUser
+    public BotUser getBotUserByTelegramId(Long telegramId) {
         try {
             String query = String.format("telegram_id=eq.%d", telegramId);
-            String url = supabaseUrl + "/rest/v1/users?" + query;
+            String url = supabaseUrl + "/rest/v1/bot_users?" + query;
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
-            ResponseEntity<User[]> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, User[].class);
+            ResponseEntity<BotUser[]> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, BotUser[].class);
 
-            User[] users = response.getBody();
+            BotUser[] users = response.getBody();
             return users != null && users.length > 0 ? users[0] : null;
         } catch (Exception e) {
-            System.err.println("Error getting user by telegram ID: " + e.getMessage());
+            System.err.println("Error getting bot user: " + e.getMessage());
             return null;
         }
     }
 
-    public void saveUser(User user) {
+    public void saveOrUpdateBotUser(BotUser user) {
         try {
-            String url = supabaseUrl + "/rest/v1/users";
+            String url = supabaseUrl + "/rest/v1/bot_users";
 
             HttpHeaders headers = createHeaders();
             headers.set("Prefer", "resolution=merge-duplicates");
 
-            HttpEntity<User> entity = new HttpEntity<>(user, headers);
-            restTemplate.exchange(url, HttpMethod.POST, entity, User.class);
+            HttpEntity<BotUser> entity = new HttpEntity<>(user, headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, BotUser.class);
+
+            System.out.println("✅ Bot user saved/updated: " + user.getTelegramId());
+
         } catch (Exception e) {
-            System.err.println("Error saving user: " + e.getMessage());
+            System.err.println("Error saving bot user: " + e.getMessage());
         }
     }
 
-    // Subscription methods
-    public void subscribeToClass(Long userId, Long scheduleId, String classType, LocalDate classDate) {
+    // Методы для Subscriptions
+    public void subscribeToClass(Long telegramId, Long scheduleId, String classType, LocalDate classDate) {
         try {
-            Subscription subscription = new Subscription(userId, scheduleId, classType, classDate);
+            Subscription subscription = new Subscription(telegramId, scheduleId, classType, classDate);
             String url = supabaseUrl + "/rest/v1/subscriptions";
 
             HttpHeaders headers = createHeaders();
@@ -243,30 +246,35 @@ public class SupabaseService {
 
             HttpEntity<Subscription> entity = new HttpEntity<>(subscription, headers);
             restTemplate.exchange(url, HttpMethod.POST, entity, Subscription.class);
+
+            System.out.println("✅ User subscribed: " + telegramId + " to schedule: " + scheduleId);
+
         } catch (Exception e) {
-            System.err.println("Error subscribing to class: " + e.getMessage());
+            System.err.println("Error subscribing: " + e.getMessage());
             throw e;
         }
     }
 
-    public void unsubscribeFromClass(Long userId, Long scheduleId, String classType) {
+    public void unsubscribeFromClass(Long telegramId, Long scheduleId, String classType) {
         try {
-            String query = String.format("user_id=eq.%d&schedule_id=eq.%d&class_type=eq.%s",
-                    userId, scheduleId, classType);
+            String query = String.format("telegram_id=eq.%d&schedule_id=eq.%d&class_type=eq.%s",
+                    telegramId, scheduleId, classType);
             String url = supabaseUrl + "/rest/v1/subscriptions?" + query;
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             restTemplate.exchange(url, HttpMethod.DELETE, entity, String.class);
+
+            System.out.println("✅ User unsubscribed: " + telegramId);
+
         } catch (Exception e) {
-            System.err.println("Error unsubscribing from class: " + e.getMessage());
+            System.err.println("Error unsubscribing: " + e.getMessage());
             throw e;
         }
     }
 
     public List<Subscription> getSubscriptionsForClass(Long scheduleId, String classType) {
         try {
-            String query = String.format("schedule_id=eq.%d&class_type=eq.%s",
-                    scheduleId, classType);
+            String query = String.format("schedule_id=eq.%d&class_type=eq.%s", scheduleId, classType);
             String url = supabaseUrl + "/rest/v1/subscriptions?" + query;
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
@@ -275,6 +283,7 @@ public class SupabaseService {
 
             Subscription[] subscriptions = response.getBody();
             return subscriptions != null ? Arrays.asList(subscriptions) : Collections.emptyList();
+
         } catch (Exception e) {
             System.err.println("Error getting subscriptions: " + e.getMessage());
             return Collections.emptyList();

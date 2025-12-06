@@ -7,8 +7,8 @@ import java.time.LocalDateTime;
 public class Subscription {
     private Long id;
 
-    @JsonProperty("user_id")
-    private Long userId;
+    @JsonProperty("telegram_id")
+    private Long telegramId;
 
     @JsonProperty("schedule_id")
     private Long scheduleId;
@@ -22,11 +22,9 @@ public class Subscription {
     @JsonProperty("subscribed_at")
     private LocalDateTime subscribedAt;
 
-    // constructors, getters, setters
-    public Subscription() {}
-
-    public Subscription(Long userId, Long scheduleId, String classType, LocalDate classDate) {
-        this.userId = userId;
+    // Конструктор
+    public Subscription(Long telegramId, Long scheduleId, String classType, LocalDate classDate) {
+        this.telegramId = telegramId;
         this.scheduleId = scheduleId;
         this.classType = classType;
         this.classDate = classDate;
@@ -37,8 +35,8 @@ public class Subscription {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public Long getTelegramId() { return telegramId; }
+    public void setTelegramId(Long telegramId) { this.telegramId = telegramId; }
 
     public Long getScheduleId() { return scheduleId; }
     public void setScheduleId(Long scheduleId) { this.scheduleId = scheduleId; }

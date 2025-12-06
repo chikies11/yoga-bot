@@ -279,4 +279,25 @@ public class HealthController {
             return "Error: " + e.getMessage();
         }
     }
+
+    @GetMapping("/check-users-table")
+    public String checkUsersTable() {
+        try {
+            String url = "https://lzejwvnyybaqaxjzttoz.supabase.co/rest/v1/users?limit=1&select=*";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("apikey", supabaseKey);
+            headers.set("Authorization", "Bearer " + supabaseKey);
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class);
+
+            return "Users table structure:\n" + response.getBody();
+
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
+        }
+    }
 }
