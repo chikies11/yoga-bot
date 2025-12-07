@@ -33,6 +33,8 @@ public class SupabaseService {
         headers.set("apikey", supabaseKey);
         headers.set("Authorization", "Bearer " + supabaseKey);
         headers.setContentType(MediaType.APPLICATION_JSON);
+        // Добавляем заголовок Prefer для Supabase
+        headers.set("Prefer", "return=representation");
         return headers;
     }
 
@@ -61,79 +63,58 @@ public class SupabaseService {
         }
     }
 
-    // Используемые методы:
+    // -----------------------------------------------------------------------------------------------------------------
+    // Методы Schedule (Исправлено имя таблицы: /rest/v1/schedule)
+    // -----------------------------------------------------------------------------------------------------------------
 
-    // Schedule methods
-    // startDay теперь всегда будет LocalDate.now()
+    /**
+     * Возвращает расписание на 7 дней, начиная с указанной даты.
+     */
     public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         try {
-            // Фетчим 7 дней, начиная с startOfWeek (сегодня)
+            // Фетчим 7 дней
             LocalDate endOfWeek = startOfWeek.plusDays(6);
 
+            // ИСПРАВЛЕНИЕ: schedules -> schedule
             String query = String.format("date.gte.%s&date.lte.%s&order=date",
                     startOfWeek.toString(), endOfWeek.toString());
-            String url = supabaseUrl + "/rest/v1/schedules?" + query;
+            String url = supabaseUrl + "/rest/v1/schedule?" + query;
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<Schedule[]> response = restTemplate.exchange(
                     url, HttpMethod.GET, entity, Schedule[].class);
 
             Schedule[] schedules = response.getBody();
-
-            // Если расписание есть, возвращаем его
             return schedules != null ? Arrays.asList(schedules) : Collections.emptyList();
 
         } catch (Exception e) {
             System.err.println("Error getting weekly schedule: " + e.getMessage());
-            // Обработка ошибки
             return Collections.emptyList();
         }
     }
 
+    /**
+     * Возвращает расписание по конкретной дате.
+     */
     public Schedule getScheduleByDate(LocalDate date) {
         try {
-            // Добавляем select=* чтобы получить все поля, включая ID
-            String query = String.format("date=eq.%s&select=*", date);
+            String query = String.format("date=eq.%s", date.toString());
+            // ИСПРАВЛЕНИЕ: schedules -> schedule
             String url = supabaseUrl + "/rest/v1/schedule?" + query;
-
-            System.out.println("🔍 Fetching schedule from URL: " + url);
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<Schedule[]> response = restTemplate.exchange(
                     url, HttpMethod.GET, entity, Schedule[].class);
 
             Schedule[] schedules = response.getBody();
-
             if (schedules != null && schedules.length > 0) {
-                Schedule schedule = schedules[0];
-
-                // ДЛЯ ОТЛАДКИ: выводим все что получили
-                System.out.println("✅ Retrieved schedule for " + date + ":");
-                System.out.println("   ID: " + schedule.getId());
-                System.out.println("   ID type: " + (schedule.getId() != null ? schedule.getId().getClass() : "null"));
-                System.out.println("   Additional properties: " + schedule.getAdditionalProperties());
-
-                // Проверяем ID в additionalProperties
-                if (schedule.getId() == null && schedule.getAdditionalProperties().containsKey("id")) {
-                    Object idValue = schedule.getAdditionalProperties().get("id");
-                    System.out.println("   ID in additionalProperties: " + idValue + " (type: " + (idValue != null ? idValue.getClass() : "null") + ")");
-
-                    // Пробуем конвертировать
-                    if (idValue instanceof Number) {
-                        schedule.setId(((Number) idValue).intValue());
-                        System.out.println("   ✅ Converted ID to Integer: " + schedule.getId());
-                    }
-                }
-
-                return schedule;
+                return schedules[0];
             }
 
-            System.out.println("❌ No schedule found for date: " + date);
             return null;
 
         } catch (Exception e) {
-            System.err.println("❌ Error getting schedule by date: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("Error getting schedule by date: " + e.getMessage());
             return null;
         }
     }
@@ -171,14 +152,15 @@ public class SupabaseService {
      */
     public void initializeDefaultSchedule() {
         LocalDate today = LocalDate.now();
-        int daysToCover = 180; // Расписание на 6 месяцев
+        int daysToCover = 180;
 
         for (int i = 0; i < daysToCover; i++) {
             LocalDate date = today.plusDays(i);
             try {
                 // 1. Проверяем, существует ли расписание на эту дату
                 String checkQuery = String.format("date=eq.%s", date.toString());
-                String checkUrl = supabaseUrl + "/rest/v1/schedules?" + checkQuery;
+                // ИСПРАВЛЕНИЕ: schedules -> schedule
+                String checkUrl = supabaseUrl + "/rest/v1/schedule?" + checkQuery;
 
                 HttpEntity<String> entity = new HttpEntity<>(createHeaders());
                 ResponseEntity<Schedule[]> response = restTemplate.exchange(
@@ -188,7 +170,6 @@ public class SupabaseService {
                     // 2. Если не существует, создаем дефолтное
                     Schedule newSchedule = createDefaultSchedule(date);
 
-                    // Supabase POST требует только те поля, которые мы хотим создать
                     Map<String, Object> scheduleMap = new HashMap<>();
                     scheduleMap.put("date", newSchedule.getDate().toString());
                     scheduleMap.put("morning_time", newSchedule.getMorningTime() != null ? newSchedule.getMorningTime().toString() : null);
@@ -200,24 +181,25 @@ public class SupabaseService {
                     String jsonBody = new ObjectMapper().writeValueAsString(scheduleMap);
 
                     HttpEntity<String> postEntity = new HttpEntity<>(jsonBody, createHeaders());
-                    String postUrl = supabaseUrl + "/rest/v1/schedules";
+                    // ИСПРАВЛЕНИЕ: schedules -> schedule
+                    String postUrl = supabaseUrl + "/rest/v1/schedule";
 
                     restTemplate.exchange(postUrl, HttpMethod.POST, postEntity, String.class);
-                    // System.out.println("✅ Created default schedule for: " + date); // Можно закомментировать для чистоты логов
-
                 }
             } catch (Exception e) {
                 System.err.println("❌ Error initializing schedule for " + date + ": " + e.getMessage());
-                // ВАЖНО: не прерываем цикл, продолжаем инициализацию для других дней
             }
         }
     }
 
+    /**
+     * Создает объект Schedule с дефолтными значениями на основе дня недели.
+     */
     private Schedule createDefaultSchedule(LocalDate date) {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
         Schedule schedule = new Schedule();
         schedule.setDate(date);
-        schedule.setActive(true); // Все дни активны по умолчанию
+        schedule.setActive(true);
 
         switch (dayOfWeek) {
             case MONDAY:
@@ -225,24 +207,19 @@ public class SupabaseService {
             case THURSDAY:
             case FRIDAY:
             case SUNDAY:
-                // Утро: 8:00 - 11:30 "МАЙСОР КЛАСС"
                 schedule.setMorningTime(LocalTime.of(8, 0));
                 schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
-                // Вечер: 17:00 - 20:30 "МАЙСОР КЛАСС"
                 schedule.setEveningTime(LocalTime.of(17, 0));
                 schedule.setEveningClass("МАЙСОР КЛАСС 17:00 - 20:30");
                 break;
             case TUESDAY:
-                // Утро: 8:00 - 11:30 "МАЙСОР КЛАСС"
                 schedule.setMorningTime(LocalTime.of(8, 0));
                 schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
-                // Вечера нет
                 schedule.setEveningTime(null);
                 schedule.setEveningClass(null);
                 break;
             case SATURDAY:
-                // Отдых (Занятий нет)
-                schedule.setActive(false);
+                schedule.setActive(false); // Отдых
                 schedule.setMorningTime(null);
                 schedule.setMorningClass(null);
                 schedule.setEveningTime(null);
@@ -278,42 +255,71 @@ public class SupabaseService {
         }
     }
 
-    // Методы для BotUser
+    // -----------------------------------------------------------------------------------------------------------------
+    // Методы BotUser (Используют users)
+    // -----------------------------------------------------------------------------------------------------------------
+
     public BotUser getBotUserByTelegramId(Long telegramId) {
         try {
             String query = String.format("telegram_id=eq.%d", telegramId);
-            String url = supabaseUrl + "/rest/v1/bot_users?" + query;
+            String url = supabaseUrl + "/rest/v1/users?" + query; // Предполагая, что таблица называется users
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<BotUser[]> response = restTemplate.exchange(
                     url, HttpMethod.GET, entity, BotUser[].class);
 
             BotUser[] users = response.getBody();
-            return users != null && users.length > 0 ? users[0] : null;
+            if (users != null && users.length > 0) {
+                return users[0];
+            }
+            return null;
         } catch (Exception e) {
-            System.err.println("Error getting bot user: " + e.getMessage());
+            System.err.println("Error getting user: " + e.getMessage());
             return null;
         }
     }
 
-    public void saveOrUpdateBotUser(BotUser user) {
+    public BotUser saveOrUpdateBotUser(BotUser botUser) {
         try {
-            String url = supabaseUrl + "/rest/v1/bot_users";
+            ObjectMapper mapper = new ObjectMapper();
+            // Используем только поля, которые нужно сохранить
+            Map<String, Object> userMap = new HashMap<>();
+            userMap.put("telegram_id", botUser.getTelegramId());
+            userMap.put("first_name", botUser.getFirstName());
+            userMap.put("last_name", botUser.getLastName());
+            userMap.put("username", botUser.getUsername());
 
-            HttpHeaders headers = createHeaders();
-            headers.set("Prefer", "resolution=merge-duplicates");
+            String jsonBody = mapper.writeValueAsString(userMap);
+            String url = supabaseUrl + "/rest/v1/users"; // Предполагая, что таблица называется users
 
-            HttpEntity<BotUser> entity = new HttpEntity<>(user, headers);
-            restTemplate.exchange(url, HttpMethod.POST, entity, BotUser.class);
+            // Если id есть, пытаемся обновить (PATCH)
+            if (botUser.getId() != null) {
+                String patchUrl = url + String.format("?id=eq.%d", botUser.getId());
+                HttpEntity<String> patchEntity = new HttpEntity<>(jsonBody, createHeaders());
+                restTemplate.exchange(patchUrl, HttpMethod.PATCH, patchEntity, String.class);
+                return botUser;
+            } else {
+                // Если id нет, вставляем (POST)
+                HttpEntity<String> postEntity = new HttpEntity<>(jsonBody, createHeaders());
+                ResponseEntity<BotUser[]> response = restTemplate.exchange(
+                        url, HttpMethod.POST, postEntity, BotUser[].class);
 
-            System.out.println("✅ Bot user saved/updated: " + user.getTelegramId());
-
+                BotUser[] createdUsers = response.getBody();
+                if (createdUsers != null && createdUsers.length > 0) {
+                    return createdUsers[0];
+                }
+                return botUser;
+            }
         } catch (Exception e) {
-            System.err.println("Error saving bot user: " + e.getMessage());
+            System.err.println("Error saving or updating user: " + e.getMessage());
+            return null;
         }
     }
 
-    // Методы для Subscriptions
+    // -----------------------------------------------------------------------------------------------------------------
+    // Методы Subscription (Используют subscriptions)
+    // -----------------------------------------------------------------------------------------------------------------
+
     public void subscribeToClass(Long telegramId, Long scheduleId, String classType, LocalDate classDate) {
         try {
             Subscription subscription = new Subscription(telegramId, scheduleId, classType, classDate);
