@@ -31,51 +31,55 @@ public class BotService {
     }
 
     public String getWeeklySchedule() {
+        // 1. Начинаем с СЕГОДНЯ
         LocalDate today = LocalDate.now();
-
-        // 1. Получаем расписание из БД, начиная с сегодня.
-        List<Schedule> schedulesList = supabaseService.getWeeklySchedule(today);
-
-        // 2. Преобразуем список в Map для быстрого доступа по дате
-        // Это более надежно, чем итерация по индексу
-        Map<LocalDate, Schedule> scheduleMap = schedulesList.stream()
-                .collect(Collectors.toMap(Schedule::getDate, schedule -> schedule));
+        // 2. Получаем 7 записей расписания, начиная с сегодня.
+        // Мы передаем LocalDate.now() в качестве начальной даты.
+        List<Schedule> schedules = supabaseService.getWeeklySchedule(today);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("📅 Расписание на следующие 7 дней (начиная с сегодня):\\n\\n");
+        sb.append("📅 Расписание на следующие 7 дней (начиная с сегодня):\n\n");
 
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-        LocalDate currentDate = today;
+        // Если расписание пустое (в Supabase нет данных), выводим сообщение
+        if (schedules.isEmpty()) {
+            sb.append("❌ Расписание не найдено в базе данных. Пожалуйста, обратитесь к администратору.");
+            return sb.toString();
+        }
 
-        // 3. Итерируемся ровно 7 раз (на 7 дней вперед)
-        for (int i = 0; i < 7; i++) {
+        // 3. Форматируем расписание
+        for (Schedule schedule : schedules) {
+            sb.append("🔸 ")
+                    .append(getRussianDayName(schedule.getDate().getDayOfWeek()))
+                    .append(", ")
+                    .append(schedule.getDate().format(dateFormatter))
+                    .append(":\n");
 
-            String dayName = getRussianDayName(currentDate.getDayOfWeek());
-            String formattedDate = currentDate.format(dateFormatter);
-
-            sb.append("🔸 ").append(dayName).append(", ").append(formattedDate).append(":\n");
-
-            // 4. Безопасный поиск расписания по дате в Map
-            Schedule scheduleForDay = scheduleMap.get(currentDate);
-
-            // Если расписание найдено И активно
-            if (scheduleForDay != null && scheduleForDay.isActive()) {
-                // Утреннее занятие
-                if (scheduleForDay.getMorningTime() != null && scheduleForDay.getMorningClass() != null) {
-                    sb.append("   - Утро (").append(scheduleForDay.getMorningTime()).append("): ").append(scheduleForDay.getMorningClass()).append("\n");
+            // Проверяем, активен ли день или есть ли хоть одно занятие
+            if (schedule.isActive() && (schedule.getMorningTime() != null || schedule.getEveningTime() != null)) {
+                // Утро
+                if (schedule.getMorningTime() != null) {
+                    sb.append("   - Утро (")
+                            .append(schedule.getMorningTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                            .append("): ")
+                            .append(schedule.getMorningClass())
+                            .append("\n");
                 }
-                // Вечернее занятие
-                if (scheduleForDay.getEveningTime() != null && scheduleForDay.getEveningClass() != null) {
-                    sb.append("   - Вечер (").append(scheduleForDay.getEveningTime()).append("): ").append(scheduleForDay.getEveningClass()).append("\n");
+
+                // Вечер
+                if (schedule.getEveningTime() != null) {
+                    sb.append("   - Вечер (")
+                            .append(schedule.getEveningTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                            .append("): ")
+                            .append(schedule.getEveningClass())
+                            .append("\n");
                 }
             } else {
-                sb.append("   - Занятий нет.\n");
+                // Отдых или неактивный день
+                sb.append("   - Занятий нет.\n");
             }
-            sb.append("\n");
-
-            // Переход к следующему дню
-            currentDate = currentDate.plusDays(1);
+            sb.append("\n"); // Добавляем пустую строку для разделения дней
         }
 
         return sb.toString();

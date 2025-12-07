@@ -1,5 +1,6 @@
 package com.yogabot.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yogabot.model.BotUser;
 import com.yogabot.model.Schedule;
 import com.yogabot.model.Subscription;
@@ -8,11 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Collections;
+import java.util.*;
 
 @Service
 public class SupabaseService {
@@ -64,16 +65,14 @@ public class SupabaseService {
 
     // Schedule methods
     // startDay теперь всегда будет LocalDate.now()
-    public List<Schedule> getWeeklySchedule(LocalDate startDay) {
+    public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         try {
-            // Устанавливаем конец периода: 6 дней после начала (всего 7 дней, включая startDay)
-            LocalDate endDay = startDay.plusDays(6);
+            // Фетчим 7 дней, начиная с startOfWeek (сегодня)
+            LocalDate endOfWeek = startOfWeek.plusDays(6);
 
-            // Запрос теперь ищет расписание в диапазоне [startDay, endDay]
-            String query = String.format("date=gte.%s&date=lte.%s&order=date",
-                    startDay.toString(), endDay.toString());
-
-            String url = supabaseUrl + "/rest/v1/schedule?" + query;
+            String query = String.format("date.gte.%s&date.lte.%s&order=date",
+                    startOfWeek.toString(), endOfWeek.toString());
+            String url = supabaseUrl + "/rest/v1/schedules?" + query;
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<Schedule[]> response = restTemplate.exchange(
@@ -167,70 +166,88 @@ public class SupabaseService {
         }
     }
 
+    /**
+     * Инициализирует расписание на следующие 180 дней, если оно отсутствует.
+     */
     public void initializeDefaultSchedule() {
-        try {
-            System.out.println("Starting schedule initialization...");
+        LocalDate today = LocalDate.now();
+        int daysToCover = 180; // Расписание на 6 месяцев
 
-            LocalDate today = LocalDate.now();
-            LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        for (int i = 0; i < daysToCover; i++) {
+            LocalDate date = today.plusDays(i);
+            try {
+                // 1. Проверяем, существует ли расписание на эту дату
+                String checkQuery = String.format("date=eq.%s", date.toString());
+                String checkUrl = supabaseUrl + "/rest/v1/schedules?" + checkQuery;
 
-            System.out.println("Initializing schedule for week starting from: " + startOfWeek);
+                HttpEntity<String> entity = new HttpEntity<>(createHeaders());
+                ResponseEntity<Schedule[]> response = restTemplate.exchange(
+                        checkUrl, HttpMethod.GET, entity, Schedule[].class);
 
-            for (int i = 0; i < 7; i++) {
-                LocalDate date = startOfWeek.plusDays(i);
-                Schedule existing = getScheduleByDate(date);
+                if (response.getBody() == null || response.getBody().length == 0) {
+                    // 2. Если не существует, создаем дефолтное
+                    Schedule newSchedule = createDefaultSchedule(date);
 
-                if (existing == null) {
-                    Schedule schedule = createDefaultScheduleForDay(date);
-                    Schedule created = createSchedule(schedule); // Измените этот метод
-                    if (created != null) {
-                        System.out.println("✅ Created schedule for: " + date + " with ID: " + created.getId());
-                    } else {
-                        System.out.println("❌ Failed to create schedule for: " + date);
-                    }
-                } else {
-                    System.out.println("✅ Schedule already exists for: " + date + " with ID: " + existing.getId());
+                    // Supabase POST требует только те поля, которые мы хотим создать
+                    Map<String, Object> scheduleMap = new HashMap<>();
+                    scheduleMap.put("date", newSchedule.getDate().toString());
+                    scheduleMap.put("morning_time", newSchedule.getMorningTime() != null ? newSchedule.getMorningTime().toString() : null);
+                    scheduleMap.put("morning_class", newSchedule.getMorningClass());
+                    scheduleMap.put("evening_time", newSchedule.getEveningTime() != null ? newSchedule.getEveningTime().toString() : null);
+                    scheduleMap.put("evening_class", newSchedule.getEveningClass());
+                    scheduleMap.put("active", newSchedule.getActive());
+
+                    String jsonBody = new ObjectMapper().writeValueAsString(scheduleMap);
+
+                    HttpEntity<String> postEntity = new HttpEntity<>(jsonBody, createHeaders());
+                    String postUrl = supabaseUrl + "/rest/v1/schedules";
+
+                    restTemplate.exchange(postUrl, HttpMethod.POST, postEntity, String.class);
+                    // System.out.println("✅ Created default schedule for: " + date); // Можно закомментировать для чистоты логов
+
                 }
+            } catch (Exception e) {
+                System.err.println("❌ Error initializing schedule for " + date + ": " + e.getMessage());
+                // ВАЖНО: не прерываем цикл, продолжаем инициализацию для других дней
             }
-
-            System.out.println("Schedule initialization completed!");
-
-        } catch (Exception e) {
-            System.err.println("Error in initializeDefaultSchedule: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
-    private Schedule createDefaultScheduleForDay(LocalDate date) {
-        String dayOfWeek = date.getDayOfWeek().toString();
-
+    private Schedule createDefaultSchedule(LocalDate date) {
+        DayOfWeek dayOfWeek = date.getDayOfWeek();
         Schedule schedule = new Schedule();
         schedule.setDate(date);
-        schedule.setActive(true); // Установите явно true или false
+        schedule.setActive(true); // Все дни активны по умолчанию
 
         switch (dayOfWeek) {
-            case "MONDAY":
-            case "WEDNESDAY":
-            case "THURSDAY":
-            case "FRIDAY":
-            case "SUNDAY":
+            case MONDAY:
+            case WEDNESDAY:
+            case THURSDAY:
+            case FRIDAY:
+            case SUNDAY:
+                // Утро: 8:00 - 11:30 "МАЙСОР КЛАСС"
                 schedule.setMorningTime(LocalTime.of(8, 0));
                 schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
+                // Вечер: 17:00 - 20:30 "МАЙСОР КЛАСС"
                 schedule.setEveningTime(LocalTime.of(17, 0));
                 schedule.setEveningClass("МАЙСОР КЛАСС 17:00 - 20:30");
                 break;
-            case "TUESDAY":
+            case TUESDAY:
+                // Утро: 8:00 - 11:30 "МАЙСОР КЛАСС"
                 schedule.setMorningTime(LocalTime.of(8, 0));
                 schedule.setMorningClass("МАЙСОР КЛАСС 8:00 - 11:30");
-                // Вечернего занятия нет
+                // Вечера нет
+                schedule.setEveningTime(null);
+                schedule.setEveningClass(null);
                 break;
-            case "SATURDAY":
-                schedule.setActive(false); // Выходной
-                schedule.setMorningClass("-Отдых-");
-                break;
-            default:
+            case SATURDAY:
+                // Отдых (Занятий нет)
                 schedule.setActive(false);
-                schedule.setMorningClass("-Отдых-");
+                schedule.setMorningTime(null);
+                schedule.setMorningClass(null);
+                schedule.setEveningTime(null);
+                schedule.setEveningClass(null);
+                break;
         }
 
         return schedule;
