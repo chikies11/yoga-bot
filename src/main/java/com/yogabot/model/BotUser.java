@@ -1,5 +1,6 @@
 package com.yogabot.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -57,6 +58,7 @@ public class BotUser {
     public void setUpdatedAt(String updatedAt) { this.updatedAt = updatedAt; }
 
     // Полное имя для отображения
+    @JsonIgnore // <-- ДОБАВЬТЕ ЭТУ АННОТАЦИЮ
     public String getDisplayName() {
         if (username != null && !username.isEmpty()) {
             return "@" + username;

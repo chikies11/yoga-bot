@@ -14,6 +14,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.DayOfWeek;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class BotService {
@@ -29,42 +31,35 @@ public class BotService {
     }
 
     public String getWeeklySchedule() {
-        // 1. Устанавливаем текущую дату как начало периода
         LocalDate today = LocalDate.now();
 
-        // 2. Вызываем SupabaseService для получения расписания с сегодняшнего дня
-        // Мы передаем именно today, чтобы не отображались прошедшие дни
-        List<Schedule> schedules = supabaseService.getWeeklySchedule(today);
+        // 1. Получаем расписание из БД, начиная с сегодня.
+        List<Schedule> schedulesList = supabaseService.getWeeklySchedule(today);
+
+        // 2. Преобразуем список в Map для быстрого доступа по дате
+        // Это более надежно, чем итерация по индексу
+        Map<LocalDate, Schedule> scheduleMap = schedulesList.stream()
+                .collect(Collectors.toMap(Schedule::getDate, schedule -> schedule));
 
         StringBuilder sb = new StringBuilder();
         sb.append("📅 Расписание на следующие 7 дней (начиная с сегодня):\\n\\n");
 
-        // 3. Форматирование расписания
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
-        // Словарь для удобной группировки расписания по дате
-        // List<Schedule> уже должен быть отсортирован по дате из БД (SupabaseService)
-
         LocalDate currentDate = today;
-        int daysDisplayed = 0;
-        int scheduleIndex = 0;
 
-        // Отображаем расписание на 7 дней
-        while (daysDisplayed < 7) {
+        // 3. Итерируемся ровно 7 раз (на 7 дней вперед)
+        for (int i = 0; i < 7; i++) {
 
-            // Получаем русское название дня и форматируем дату
             String dayName = getRussianDayName(currentDate.getDayOfWeek());
             String formattedDate = currentDate.format(dateFormatter);
 
             sb.append("🔸 ").append(dayName).append(", ").append(formattedDate).append(":\n");
 
-            // Ищем расписание для текущей даты
-            Schedule scheduleForDay = null;
-            if (scheduleIndex < schedules.size() && schedules.get(scheduleIndex).getDate().isEqual(currentDate)) {
-                scheduleForDay = schedules.get(scheduleIndex);
-                scheduleIndex++;
-            }
+            // 4. Безопасный поиск расписания по дате в Map
+            Schedule scheduleForDay = scheduleMap.get(currentDate);
 
+            // Если расписание найдено И активно
             if (scheduleForDay != null && scheduleForDay.isActive()) {
                 // Утреннее занятие
                 if (scheduleForDay.getMorningTime() != null && scheduleForDay.getMorningClass() != null) {
@@ -79,8 +74,8 @@ public class BotService {
             }
             sb.append("\n");
 
+            // Переход к следующему дню
             currentDate = currentDate.plusDays(1);
-            daysDisplayed++;
         }
 
         return sb.toString();
