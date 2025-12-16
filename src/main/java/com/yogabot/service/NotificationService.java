@@ -21,15 +21,33 @@ public class NotificationService {
     @Value("${telegram.channel.id}")
     private String channelId;
 
+    // Флаг состояния уведомлений (по умолчанию включены)
+    private boolean notificationsEnabled = true;
+
+    // Метод переключения
+    public String toggleNotifications() {
+        notificationsEnabled = !notificationsEnabled;
+        return notificationsEnabled ? "✅ Автоматические уведомления ВКЛЮЧЕНЫ." : "🔕 Автоматические уведомления ВЫКЛЮЧЕНЫ.";
+    }
+
+    public boolean isNotificationsEnabled() {
+        return notificationsEnabled;
+    }
+
     // Уведомление о занятиях на завтра в 16:00 по Москве
     @Scheduled(cron = "0 0 16 * * ?", zone = "Europe/Moscow")
     public void sendDailyNotification() {
+        if (!notificationsEnabled) {
+            System.out.println("🔕 Notifications are disabled. Skipping daily schedule sending.");
+            return;
+        }
+
         try {
             LocalDate tomorrow = LocalDate.now().plusDays(1);
-            SendMessage message = botService.createNotificationMessage(tomorrow); // Вызов BotService
+            SendMessage message = botService.createNotificationMessage(tomorrow);
             message.setChatId(channelId);
 
-            botController.execute(message); // Только для отправки
+            botController.execute(message);
             System.out.println("✅ Sent notification to channel at: " + LocalDateTime.now());
 
         } catch (Exception e) {
@@ -38,39 +56,15 @@ public class NotificationService {
         }
     }
 
-    // Дополнительная проверка в 16:01 (можно добавить логику если нужно)
-    @Scheduled(cron = "0 1 16 * * ?", zone = "Europe/Moscow")
-    public void sendEveningClassNotification() {
-        System.out.println("🔔 Evening notification check at: " + LocalDateTime.now());
-        // Можно добавить дополнительную логику если нужно
-    }
-
-    // Тестовый метод для ручной отправки уведомления
+    // Тестовая отправка
     public void sendTestNotification() {
         try {
-            System.out.println("🔄 Starting test notification...");
-            System.out.println("Channel ID: " + channelId);
-
             LocalDate tomorrow = LocalDate.now().plusDays(1);
-            System.out.println("Tomorrow date: " + tomorrow);
-
             SendMessage message = botService.createNotificationMessage(tomorrow);
             message.setChatId(channelId);
-
-            System.out.println("Message text: " + message.getText());
-            System.out.println("Has reply markup: " + (message.getReplyMarkup() != null));
-
             botController.execute(message);
-            System.out.println("✅ Test notification sent to channel successfully");
-
         } catch (Exception e) {
-            System.err.println("❌ Error sending test notification: " + e.getMessage());
             e.printStackTrace();
-            throw new RuntimeException("Failed to send test notification", e);
         }
-    }
-
-    public String getChannelId() {
-        return channelId;
     }
 }

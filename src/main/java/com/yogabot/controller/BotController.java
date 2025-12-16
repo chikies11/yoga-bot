@@ -3,6 +3,7 @@ package com.yogabot.controller;
 import com.yogabot.model.BotUser;
 import com.yogabot.model.Schedule;
 import com.yogabot.service.BotService;
+import com.yogabot.service.NotificationService;
 import com.yogabot.service.SupabaseService;
 import com.yogabot.util.KeyboardUtil;
 import org.slf4j.Logger;
@@ -17,9 +18,14 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class BotController extends TelegramWebhookBot {
@@ -34,6 +40,9 @@ public class BotController extends TelegramWebhookBot {
 
     @Autowired
     private BotService botService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     @Autowired
     private SupabaseService supabaseService;
@@ -88,7 +97,13 @@ public class BotController extends TelegramWebhookBot {
                 case "✏️ Редактирование":
                     return isAdmin ? sendEditOptions(chatId) : sendAccessDenied(chatId);
                 case "🔔 Уведомления вкл/выкл":
-                    return isAdmin ? sendNotificationSettings(chatId) : sendAccessDenied(chatId);
+                    if (isAdmin) {
+                        // ИСПРАВЛЕНО: Теперь реально переключает
+                        String status = notificationService.toggleNotifications();
+                        return sendMessage(chatId, status);
+                    } else {
+                        return sendAccessDenied(chatId);
+                    }
                 case "✏️ Изменить":
                     return isAdmin ? sendEditScheduleMenu(chatId) : sendAccessDenied(chatId);
                 case "🗑 Удалить":
@@ -96,10 +111,8 @@ public class BotController extends TelegramWebhookBot {
                 case "🔙 Назад":
                     return sendMainMenu(chatId, isAdmin);
                 default:
-                    if (isAdmin && text.contains(":")) {
-                        return handleAdminScheduleInput(chatId, text);
-                    }
-                    return sendMessage(chatId, "Неизвестная команда. Используйте кнопки меню.");
+                    // Простое эхо, чтобы не игнорировать ввод (можно убрать)
+                    return sendMessage(chatId, "Выберите действие в меню.");
             }
         } catch (Exception e) {
             log.error("Error handling message: " + text, e);
@@ -107,9 +120,7 @@ public class BotController extends TelegramWebhookBot {
         }
     }
 
-    private SendMessage handleAdminScheduleInput(Long chatId, String text) {
-        return sendMessage(chatId, "Функция ручного ввода пока отключена.");
-    }
+    // --- Send Methods ---
 
     private SendMessage sendWelcomeMessage(Long chatId, boolean isAdmin) {
         String welcomeText = "🧘 Добро пожаловать в Yoga Bot!\n\n" +
@@ -119,16 +130,11 @@ public class BotController extends TelegramWebhookBot {
 
     private SendMessage sendSchedule(Long chatId, boolean isAdmin) {
         String schedule = botService.getWeeklySchedule();
-        log.info("Sending schedule length: {}", schedule.length());
         return createMessage(chatId, schedule, KeyboardUtil.getMainKeyboard(isAdmin));
     }
 
     private SendMessage sendEditOptions(Long chatId) {
         return createMessage(chatId, "✏️ Режим редактирования\n\nВыберите действие:", KeyboardUtil.getEditKeyboard());
-    }
-
-    private SendMessage sendNotificationSettings(Long chatId) {
-        return sendMessage(chatId, "🔔 Уведомления работают автоматически в 16:00.");
     }
 
     private SendMessage sendMainMenu(Long chatId, boolean isAdmin) {
@@ -138,6 +144,25 @@ public class BotController extends TelegramWebhookBot {
     private SendMessage sendAccessDenied(Long chatId) {
         return sendMessage(chatId, "⛔ У вас нет доступа к этой функции.");
     }
+
+    // ИСПРАВЛЕНО: Генерация меню с кнопками дней
+    private SendMessage sendEditScheduleMenu(Long chatId) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("✏️ Выберите день для изменения расписания (или выходного):");
+        message.setReplyMarkup(botService.getScheduleKeyboard("edit_day_"));
+        return message;
+    }
+
+    private SendMessage sendDeleteScheduleMenu(Long chatId) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("🗑 Выберите день для удаления (сброса) расписания:");
+        message.setReplyMarkup(botService.getScheduleKeyboard("delete_day_"));
+        return message;
+    }
+
+    // --- Utility Methods ---
 
     private SendMessage sendMessage(Long chatId, String text) {
         SendMessage message = new SendMessage();
@@ -163,6 +188,8 @@ public class BotController extends TelegramWebhookBot {
         log.info("✅ User saved/updated: {}", telegramUser.getId());
     }
 
+    // --- Callback Query Handlers ---
+
     private BotApiMethod<?> handleCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         Long userId = callbackQuery.getFrom().getId();
@@ -170,6 +197,18 @@ public class BotController extends TelegramWebhookBot {
 
         if (data.startsWith("subscribe_") || data.startsWith("unsubscribe_")) {
             return handleSubscription(data, userId, chatId, callbackQuery.getFrom());
+        }
+        else if (data.startsWith("edit_day_")) {
+            return handleEditDay(data, chatId);
+        }
+        else if (data.startsWith("delete_day_")) {
+            return handleDeleteDay(data, chatId);
+        }
+        else if (data.startsWith("confirm_delete_")) {
+            return handleConfirmDelete(data, chatId);
+        }
+        else if (data.equals("cancel_delete")) {
+            return sendDeleteScheduleMenu(chatId);
         }
         else if (data.equals("back_to_edit")) {
             return sendEditOptions(chatId);
@@ -210,19 +249,47 @@ public class BotController extends TelegramWebhookBot {
         }
     }
 
-    private SendMessage sendEditScheduleMenu(Long chatId) {
-        return sendMessage(chatId, "Функция редактирования в разработке.");
-    }
-
+    // ИСПРАВЛЕНО: Обработка нажатия на день для редактирования
     private SendMessage handleEditDay(String data, Long chatId) {
-        return sendMessage(chatId, "Функция редактирования в разработке.");
+        String dateStr = data.replace("edit_day_", "");
+        return sendMessage(chatId, "✏️ Чтобы изменить расписание на <b>" + dateStr + "</b>, необходимо изменить код бота для поддержки текстового ввода.\n\n" +
+                "<i>(В данной версии доступно только отображение меню дней)</i>");
     }
 
-    private SendMessage sendDeleteScheduleMenu(Long chatId) {
-        return sendMessage(chatId, "Функция удаления в разработке.");
-    }
-
+    // ИСПРАВЛЕНО: Обработка нажатия на день для удаления
     private SendMessage handleDeleteDay(String data, Long chatId) {
-        return sendMessage(chatId, "Функция удаления в разработке.");
+        String dateStr = data.replace("delete_day_", "");
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+
+        InlineKeyboardButton yes = new InlineKeyboardButton("✅ Да, удалить");
+        yes.setCallbackData("confirm_delete_" + dateStr);
+
+        InlineKeyboardButton no = new InlineKeyboardButton("❌ Отмена");
+        no.setCallbackData("cancel_delete");
+
+        row.add(yes);
+        row.add(no);
+        rows.add(row);
+        markup.setKeyboard(rows);
+
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("🗑 Вы уверены, что хотите сбросить расписание на <b>" + dateStr + "</b>?");
+        message.setReplyMarkup(markup);
+        message.setParseMode("HTML");
+        return message;
+    }
+
+    private SendMessage handleConfirmDelete(String data, Long chatId) {
+        String dateStr = data.replace("confirm_delete_", "");
+        try {
+            supabaseService.deleteSchedule(LocalDate.parse(dateStr));
+            return sendMessage(chatId, "✅ Расписание на " + dateStr + " успешно сброшено (отдых).");
+        } catch (Exception e) {
+            return sendMessage(chatId, "❌ Ошибка удаления: " + e.getMessage());
+        }
     }
 }

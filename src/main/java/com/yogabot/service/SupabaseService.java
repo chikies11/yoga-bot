@@ -59,19 +59,14 @@ public class SupabaseService {
     public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         try {
             LocalDate endOfWeek = startOfWeek.plusDays(6);
-            // Формируем "сырой" URL с параметрами
             String rawUrl = String.format("%s/rest/v1/schedule?date=gte.%s&date=lte.%s&order=date",
                     supabaseUrl, startOfWeek.toString(), endOfWeek.toString());
-
-            // ВАЖНО: Используем URI.create, чтобы RestTemplate не кодировал символы '&'
             URI uri = URI.create(rawUrl);
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<Schedule[]> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Schedule[].class);
 
-            List<Schedule> result = response.getBody() != null ? Arrays.asList(response.getBody()) : Collections.emptyList();
-            log.info("Loaded {} schedules for week starting {}", result.size(), startOfWeek);
-            return result;
+            return response.getBody() != null ? Arrays.asList(response.getBody()) : Collections.emptyList();
         } catch (Exception e) {
             log.error("Error getting weekly schedule", e);
             return Collections.emptyList();
@@ -89,6 +84,37 @@ public class SupabaseService {
         } catch (Exception e) {
             log.error("Error getting schedule by date: {}", date, e);
             return null;
+        }
+    }
+
+    // Метод обновления расписания (для редактирования)
+    public void updateSchedule(Schedule schedule) {
+        try {
+            String url = supabaseUrl + "/rest/v1/schedule?date=eq." + schedule.getDate();
+            HttpEntity<Schedule> entity = new HttpEntity<>(schedule, createHeaders());
+            restTemplate.exchange(url, HttpMethod.PATCH, entity, String.class);
+            log.info("Schedule updated for {}", schedule.getDate());
+        } catch (Exception e) {
+            log.error("Error updating schedule", e);
+        }
+    }
+
+    // Метод удаления (сброса) расписания
+    public void deleteSchedule(LocalDate date) {
+        try {
+            // В данном случае мы не удаляем строку, а делаем день неактивным и очищаем поля
+            Schedule emptySchedule = new Schedule();
+            emptySchedule.setDate(date);
+            emptySchedule.setActive(false);
+            emptySchedule.setMorningClass(null);
+            emptySchedule.setMorningTime(null);
+            emptySchedule.setEveningClass(null);
+            emptySchedule.setEveningTime(null);
+
+            updateSchedule(emptySchedule);
+            log.info("Schedule cleared for {}", date);
+        } catch (Exception e) {
+            log.error("Error deleting schedule", e);
         }
     }
 
@@ -161,17 +187,11 @@ public class SupabaseService {
 
     public List<BotUser> getUsersByIds(List<Long> telegramIds) {
         if (telegramIds == null || telegramIds.isEmpty()) return Collections.emptyList();
-
         try {
-            String idsStr = telegramIds.stream()
-                    .map(String::valueOf)
-                    .collect(Collectors.joining(","));
-
+            String idsStr = telegramIds.stream().map(String::valueOf).collect(Collectors.joining(","));
             String url = supabaseUrl + "/rest/v1/bot_users?telegram_id=in.(" + idsStr + ")";
-
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<BotUser[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, BotUser[].class);
-
             return response.getBody() != null ? Arrays.asList(response.getBody()) : Collections.emptyList();
         } catch (Exception e) {
             log.error("Error getting users by ids", e);
@@ -214,7 +234,6 @@ public class SupabaseService {
             log.info("User {} subscribed to {}", telegramId, scheduleId);
         } catch (Exception e) {
             log.error("Error subscribing", e);
-            throw new RuntimeException("Subscription failed");
         }
     }
 

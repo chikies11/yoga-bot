@@ -35,7 +35,6 @@ public class BotService {
         return telegramId != null && telegramId.equals(adminTelegramId);
     }
 
-    // Вспомогательный метод для экранирования HTML
     private String escapeHtml(String text) {
         if (text == null) return "";
         return text.replace("&", "&amp;")
@@ -170,6 +169,39 @@ public class BotService {
         }
 
         return message;
+    }
+
+    // --- НОВЫЙ МЕТОД ДЛЯ МЕНЮ РЕДАКТИРОВАНИЯ ---
+    public InlineKeyboardMarkup getScheduleKeyboard(String prefixCallback) {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        LocalDate startDay = LocalDate.now();
+        List<Schedule> schedules = supabaseService.getWeeklySchedule(startDay);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM");
+
+        for (Schedule schedule : schedules) {
+            String dayName = getRussianDayName(schedule.getDate().getDayOfWeek());
+            String buttonText = dayName + " (" + schedule.getDate().format(formatter) + ")";
+
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            InlineKeyboardButton button = new InlineKeyboardButton();
+            button.setText(buttonText);
+            button.setCallbackData(prefixCallback + schedule.getDate());
+
+            row.add(button);
+            rows.add(row);
+        }
+
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        InlineKeyboardButton backButton = new InlineKeyboardButton();
+        backButton.setText("🔙 Назад");
+        backButton.setCallbackData("back_to_edit");
+        backRow.add(backButton);
+        rows.add(backRow);
+
+        keyboardMarkup.setKeyboard(rows);
+        return keyboardMarkup;
     }
 
     private List<InlineKeyboardButton> createSubscribeRow(String label, String type, Long scheduleId) {
