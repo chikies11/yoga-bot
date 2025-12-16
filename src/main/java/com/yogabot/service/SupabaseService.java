@@ -12,6 +12,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -43,7 +44,6 @@ public class SupabaseService {
 
     public String checkUserConnection() {
         try {
-            // ИСПРАВЛЕНО: users -> bot_users
             String url = supabaseUrl + "/rest/v1/bot_users?limit=1&select=*";
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
@@ -59,13 +59,19 @@ public class SupabaseService {
     public List<Schedule> getWeeklySchedule(LocalDate startOfWeek) {
         try {
             LocalDate endOfWeek = startOfWeek.plusDays(6);
-            String query = String.format("date.gte.%s&date.lte.%s&order=date", startOfWeek, endOfWeek);
-            String url = supabaseUrl + "/rest/v1/schedule?" + query;
+            // Формируем "сырой" URL с параметрами
+            String rawUrl = String.format("%s/rest/v1/schedule?date=gte.%s&date=lte.%s&order=date",
+                    supabaseUrl, startOfWeek.toString(), endOfWeek.toString());
+
+            // ВАЖНО: Используем URI.create, чтобы RestTemplate не кодировал символы '&'
+            URI uri = URI.create(rawUrl);
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
-            ResponseEntity<Schedule[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, Schedule[].class);
+            ResponseEntity<Schedule[]> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Schedule[].class);
 
-            return response.getBody() != null ? Arrays.asList(response.getBody()) : Collections.emptyList();
+            List<Schedule> result = response.getBody() != null ? Arrays.asList(response.getBody()) : Collections.emptyList();
+            log.info("Loaded {} schedules for week starting {}", result.size(), startOfWeek);
+            return result;
         } catch (Exception e) {
             log.error("Error getting weekly schedule", e);
             return Collections.emptyList();
@@ -138,11 +144,10 @@ public class SupabaseService {
         }
     }
 
-    // --- User Methods (ИСПРАВЛЕНО: users -> bot_users) ---
+    // --- User Methods ---
 
     public BotUser getBotUserByTelegramId(Long telegramId) {
         try {
-            // ИСПРАВЛЕНО: users -> bot_users
             String url = supabaseUrl + "/rest/v1/bot_users?telegram_id=eq." + telegramId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<BotUser[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, BotUser[].class);
@@ -162,7 +167,6 @@ public class SupabaseService {
                     .map(String::valueOf)
                     .collect(Collectors.joining(","));
 
-            // ИСПРАВЛЕНО: users -> bot_users
             String url = supabaseUrl + "/rest/v1/bot_users?telegram_id=in.(" + idsStr + ")";
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
@@ -177,12 +181,8 @@ public class SupabaseService {
 
     public void saveOrUpdateBotUser(BotUser botUser) {
         try {
-            // ИСПРАВЛЕНО: users -> bot_users
             String url = supabaseUrl + "/rest/v1/bot_users";
-
-            // Проверяем существование пользователя
             BotUser existing = getBotUserByTelegramId(botUser.getTelegramId());
-
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> map = new HashMap<>();
             map.put("telegram_id", botUser.getTelegramId());
@@ -192,12 +192,9 @@ public class SupabaseService {
             String json = mapper.writeValueAsString(map);
 
             if (existing != null) {
-                // Если пользователь есть - обновляем по ID (внутреннему ID базы, если он есть, или через параметры)
-                // Лучше обновлять по telegram_id
                 String patchUrl = url + "?telegram_id=eq." + botUser.getTelegramId();
                 restTemplate.exchange(patchUrl, HttpMethod.PATCH, new HttpEntity<>(json, createHeaders()), String.class);
             } else {
-                // Создаем нового
                 restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(json, createHeaders()), String.class);
             }
         } catch (Exception e) {
@@ -212,7 +209,6 @@ public class SupabaseService {
             Subscription sub = new Subscription(telegramId, scheduleId, classType, classDate);
             HttpHeaders headers = createHeaders();
             headers.set("Prefer", "resolution=ignore-duplicates");
-
             HttpEntity<Subscription> entity = new HttpEntity<>(sub, headers);
             restTemplate.exchange(supabaseUrl + "/rest/v1/subscriptions", HttpMethod.POST, entity, String.class);
             log.info("User {} subscribed to {}", telegramId, scheduleId);
