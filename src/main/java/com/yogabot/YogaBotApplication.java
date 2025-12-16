@@ -4,12 +4,11 @@ import com.yogabot.service.SupabaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import javax.annotation.PostConstruct;
 
-@SpringBootApplication(exclude = {DataSourceAutoConfiguration.class})
+@SpringBootApplication
 @EnableScheduling
 public class YogaBotApplication {
 
@@ -22,13 +21,7 @@ public class YogaBotApplication {
 
     @PostConstruct
     public void initialize() {
-        try {
-            System.out.println("Initializing default schedule...");
-            supabaseService.initializeDefaultSchedule();
-            System.out.println("Default schedule initialized successfully!");
-        } catch (Exception e) {
-            System.err.println("Error initializing schedule: " + e.getMessage());
-            // Продолжаем работу даже если есть ошибки с БД
-        }
+        // Инициализация расписания при запуске
+        supabaseService.initializeDefaultSchedule();
     }
 }
