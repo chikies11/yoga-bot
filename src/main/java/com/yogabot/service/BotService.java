@@ -35,19 +35,21 @@ public class BotService {
         return telegramId != null && telegramId.equals(adminTelegramId);
     }
 
+    // --- ЛОГИКА РАСПИСАНИЯ (7 ДНЕЙ) ---
     public String getWeeklySchedule() {
         LocalDate today = LocalDate.now();
+        // Получаем расписание на 7 дней
         List<Schedule> schedules = supabaseService.getWeeklySchedule(today);
-        StringBuilder sb = new StringBuilder("📅 Расписание на неделю:\n\n");
+        StringBuilder sb = new StringBuilder("📅 <b>Расписание на ближайшие 7 дней:</b>\n\n");
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
         if (schedules.isEmpty()) {
-            return "❌ Расписание не найдено.";
+            return "❌ Расписание не найдено. Обратитесь к администратору для инициализации.";
         }
 
         for (Schedule schedule : schedules) {
-            sb.append("🔸 ").append(getRussianDayName(schedule.getDate().getDayOfWeek()))
-                    .append(", ").append(schedule.getDate().format(dateFormatter)).append(":\n");
+            sb.append("🔸 <b>").append(getRussianDayName(schedule.getDate().getDayOfWeek()))
+                    .append(", ").append(schedule.getDate().format(dateFormatter)).append(":</b>\n");
 
             if (schedule.isActive() && (schedule.getMorningTime() != null || schedule.getEveningTime() != null)) {
                 if (schedule.getMorningTime() != null) {
@@ -57,16 +59,93 @@ public class BotService {
                     sb.append("   🌇 ").append(schedule.getEveningTime()).append(" - ").append(schedule.getEveningClass()).append("\n");
                 }
             } else {
-                sb.append("   😴 Занятий нет.\n");
+                sb.append("   😴 Отдых / Занятий нет.\n");
             }
             sb.append("\n");
         }
         return sb.toString();
     }
 
+    // --- НОВАЯ ЛОГИКА ДЛЯ КНОПКИ "ЗАПИСЬ" (СЕГОДНЯ + ЗАВТРА) ---
+    public String getTodayTomorrowSubscriptions() {
+        LocalDate today = LocalDate.now();
+        StringBuilder sb = new StringBuilder("📋 <b>Список записавшихся (Сегодня и Завтра):</b>\n\n");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM");
+
+        // Цикл на 2 дня: 0 (сегодня) и 1 (завтра)
+        for (int i = 0; i < 2; i++) {
+            LocalDate date = today.plusDays(i);
+            Schedule schedule = supabaseService.getScheduleByDate(date);
+            String dayLabel = (i == 0) ? "СЕГОДНЯ" : "ЗАВТРА";
+
+            sb.append("🔹 <b>").append(dayLabel).append(" ")
+                    .append(getRussianDayName(date.getDayOfWeek())).append(" (")
+                    .append(date.format(dateFormatter)).append(")</b>\n");
+
+            if (schedule == null || !schedule.isActive()) {
+                sb.append("   <i>Занятий нет.</i>\n\n");
+                continue;
+            }
+
+            // Утро
+            if (schedule.getMorningTime() != null) {
+                sb.append("   🌅 Утро (").append(schedule.getMorningTime()).append("): ").append(schedule.getMorningClass()).append("\n");
+                String users = getFormattedUserList(schedule.getId(), "MORNING");
+                sb.append(users).append("\n");
+            }
+
+            // Вечер
+            if (schedule.getEveningTime() != null) {
+                sb.append("   🌇 Вечер (").append(schedule.getEveningTime()).append("): ").append(schedule.getEveningClass()).append("\n");
+                String users = getFormattedUserList(schedule.getId(), "EVENING");
+                sb.append(users).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
+    }
+
+    // Вспомогательный метод для получения списка имен (с оптимизацией N+1)
+    private String getFormattedUserList(Long scheduleId, String classType) {
+        if (scheduleId == null) return "   ⚠️ Ошибка ID расписания\n";
+
+        List<Subscription> subscriptions = supabaseService.getSubscriptionsForClass(scheduleId, classType);
+
+        if (subscriptions.isEmpty()) {
+            return "      — <i>Нет записей</i>\n";
+        }
+
+        List<Long> userIds = subscriptions.stream()
+                .map(Subscription::getTelegramId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        List<BotUser> users = supabaseService.getUsersByIds(userIds);
+        Map<Long, BotUser> userMap = users.stream()
+                .collect(Collectors.toMap(BotUser::getTelegramId, user -> user, (u1, u2) -> u1));
+
+        StringBuilder userList = new StringBuilder();
+        for (int i = 0; i < subscriptions.size(); i++) {
+            Subscription sub = subscriptions.get(i);
+            BotUser user = userMap.get(sub.getTelegramId());
+            String displayName = (user != null) ? user.getDisplayName() : "ID: " + sub.getTelegramId();
+
+            userList.append("      ").append(i + 1).append(". ").append(displayName).append("\n");
+        }
+        return userList.toString();
+    }
+
+    // Метод для отдельного списка (если нужно) - оставлен для совместимости
+    public String getSubscriptionsList(Long scheduleId, String classType) {
+        return getFormattedUserList(scheduleId, classType);
+    }
+
+    // --- УВЕДОМЛЕНИЯ ---
     public SendMessage createNotificationMessage(LocalDate date) {
         Schedule schedule = supabaseService.getScheduleByDate(date);
         SendMessage message = new SendMessage();
+        message.setParseMode("HTML"); // Включаем HTML форматирование
 
         if (schedule == null || !schedule.isActive()) {
             message.setText("На завтра (" + date + ") занятий нет. Отдыхаем! 🧘‍♀️");
@@ -74,7 +153,7 @@ public class BotService {
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("📣 Напоминание о занятиях!\n\n")
+        sb.append("📣 <b>Напоминание о занятиях!</b>\n\n")
                 .append("🗓 ").append(getRussianDayName(date.getDayOfWeek()))
                 .append(" (").append(date.format(DateTimeFormatter.ofPattern("dd.MM"))).append(")\n\n");
 
@@ -115,44 +194,6 @@ public class BotService {
         row.add(sub);
         row.add(unsub);
         return row;
-    }
-
-    // --- ОПТИМИЗИРОВАННЫЙ МЕТОД ---
-    public String getSubscriptionsList(Long scheduleId, String classType) {
-        // 1. Получаем список подписок
-        List<Subscription> subscriptions = supabaseService.getSubscriptionsForClass(scheduleId, classType);
-
-        if (subscriptions.isEmpty()) {
-            return "На это занятие пока никто не записался.";
-        }
-
-        // 2. Собираем все ID пользователей
-        List<Long> userIds = subscriptions.stream()
-                .map(Subscription::getTelegramId)
-                .distinct()
-                .collect(Collectors.toList());
-
-        // 3. Загружаем пользователей ОДНИМ запросом (Batch Fetch)
-        List<BotUser> users = supabaseService.getUsersByIds(userIds);
-
-        // 4. Создаем Map для быстрого поиска: ID -> User
-        Map<Long, BotUser> userMap = users.stream()
-                .collect(Collectors.toMap(BotUser::getTelegramId, user -> user, (u1, u2) -> u1));
-
-        StringBuilder sb = new StringBuilder();
-        String classTime = classType.equals("MORNING") ? "утреннее" : "вечернее";
-        sb.append("📋 Записались на ").append(classTime).append(" занятие:\n\n");
-
-        // 5. Формируем список в памяти
-        for (int i = 0; i < subscriptions.size(); i++) {
-            Subscription sub = subscriptions.get(i);
-            BotUser user = userMap.get(sub.getTelegramId());
-            String displayName = (user != null) ? user.getDisplayName() : "ID: " + sub.getTelegramId();
-
-            sb.append(i + 1).append(". ").append(displayName).append("\n");
-        }
-
-        return sb.toString();
     }
 
     public String getRussianDayName(DayOfWeek dayOfWeek) {

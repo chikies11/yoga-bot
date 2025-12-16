@@ -43,7 +43,8 @@ public class SupabaseService {
 
     public String checkUserConnection() {
         try {
-            String url = supabaseUrl + "/rest/v1/users?limit=1&select=*";
+            // ИСПРАВЛЕНО: users -> bot_users
+            String url = supabaseUrl + "/rest/v1/bot_users?limit=1&select=*";
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
             return response.getStatusCode().is2xxSuccessful() ? "✅ Connection OK" : "❌ Connection Failed";
@@ -129,8 +130,6 @@ public class SupabaseService {
     private void createSchedule(Schedule schedule) {
         try {
             String url = supabaseUrl + "/rest/v1/schedule";
-            // Сериализуем вручную или через объект, если Jackson настроен корректно
-            // Для надежности используем Map, как у вас было, но лучше использовать объект
             HttpEntity<Schedule> entity = new HttpEntity<>(schedule, createHeaders());
             restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
             log.info("Created schedule for {}", schedule.getDate());
@@ -139,11 +138,12 @@ public class SupabaseService {
         }
     }
 
-    // --- User Methods ---
+    // --- User Methods (ИСПРАВЛЕНО: users -> bot_users) ---
 
     public BotUser getBotUserByTelegramId(Long telegramId) {
         try {
-            String url = supabaseUrl + "/rest/v1/users?telegram_id=eq." + telegramId;
+            // ИСПРАВЛЕНО: users -> bot_users
+            String url = supabaseUrl + "/rest/v1/bot_users?telegram_id=eq." + telegramId;
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<BotUser[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, BotUser[].class);
             BotUser[] users = response.getBody();
@@ -154,7 +154,6 @@ public class SupabaseService {
         }
     }
 
-    // НОВЫЙ МЕТОД ДЛЯ ОПТИМИЗАЦИИ (N+1 fix)
     public List<BotUser> getUsersByIds(List<Long> telegramIds) {
         if (telegramIds == null || telegramIds.isEmpty()) return Collections.emptyList();
 
@@ -163,8 +162,8 @@ public class SupabaseService {
                     .map(String::valueOf)
                     .collect(Collectors.joining(","));
 
-            // Используем оператор in для фильтрации
-            String url = supabaseUrl + "/rest/v1/users?telegram_id=in.(" + idsStr + ")";
+            // ИСПРАВЛЕНО: users -> bot_users
+            String url = supabaseUrl + "/rest/v1/bot_users?telegram_id=in.(" + idsStr + ")";
 
             HttpEntity<String> entity = new HttpEntity<>(createHeaders());
             ResponseEntity<BotUser[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, BotUser[].class);
@@ -178,10 +177,11 @@ public class SupabaseService {
 
     public void saveOrUpdateBotUser(BotUser botUser) {
         try {
-            // Упрощенная логика upsert (требуется настройка ON CONFLICT в Supabase,
-            // но ваш метод через GET+POST/PATCH тоже рабочий, оставим его логику но чище)
+            // ИСПРАВЛЕНО: users -> bot_users
+            String url = supabaseUrl + "/rest/v1/bot_users";
+
+            // Проверяем существование пользователя
             BotUser existing = getBotUserByTelegramId(botUser.getTelegramId());
-            String url = supabaseUrl + "/rest/v1/users";
 
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> map = new HashMap<>();
@@ -192,9 +192,12 @@ public class SupabaseService {
             String json = mapper.writeValueAsString(map);
 
             if (existing != null) {
-                String patchUrl = url + "?id=eq." + existing.getId();
+                // Если пользователь есть - обновляем по ID (внутреннему ID базы, если он есть, или через параметры)
+                // Лучше обновлять по telegram_id
+                String patchUrl = url + "?telegram_id=eq." + botUser.getTelegramId();
                 restTemplate.exchange(patchUrl, HttpMethod.PATCH, new HttpEntity<>(json, createHeaders()), String.class);
             } else {
+                // Создаем нового
                 restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(json, createHeaders()), String.class);
             }
         } catch (Exception e) {
@@ -207,7 +210,6 @@ public class SupabaseService {
     public void subscribeToClass(Long telegramId, Long scheduleId, String classType, LocalDate classDate) {
         try {
             Subscription sub = new Subscription(telegramId, scheduleId, classType, classDate);
-            // Добавляем заголовок для игнорирования дубликатов или используем on_conflict в БД
             HttpHeaders headers = createHeaders();
             headers.set("Prefer", "resolution=ignore-duplicates");
 
